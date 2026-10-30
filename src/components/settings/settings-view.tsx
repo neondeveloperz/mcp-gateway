@@ -304,7 +304,7 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Bind Host Address
                   </label>
@@ -312,21 +312,21 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                     value={config.host}
                     onChange={(e) => updateConfig("host", e.target.value)}
                     placeholder="127.0.0.1"
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
                   {isPublicHost ? (
-                    <div className="flex items-center gap-1.5 text-[11px] text-amber-400 mt-1">
+                    <div className="flex items-center gap-1.5 text-[11px] text-amber-400 mt-0.5">
                       <AlertTriangleIcon className="size-3 shrink-0" />
                       <span>Warning: 0.0.0.0 exposes the gateway to local network interfaces</span>
                     </div>
                   ) : (
-                    <span className="text-[11px] text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground">
                       Recommended: 127.0.0.1 (Localhost only) for maximum security
-                    </span>
+                    </p>
                   )}
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     HTTP / SSE Port
                   </label>
@@ -334,16 +334,16 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                     type="number"
                     value={config.port}
                     onChange={(e) => updateConfig("port", Number(e.target.value))}
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
-                  <span className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     Default port is 8080. Ensure port is not occupied.
-                  </span>
+                  </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     SSE Endpoint Route
                   </label>
@@ -351,14 +351,14 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                     value={config.ssePath}
                     onChange={(e) => updateConfig("ssePath", e.target.value)}
                     placeholder="/sse"
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
-                  <span className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     Path where AI agents establish Server-Sent Events stream
-                  </span>
+                  </p>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Allowed CORS Origins
                   </label>
@@ -366,16 +366,16 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                     value={config.corsOrigins}
                     onChange={(e) => updateConfig("corsOrigins", e.target.value)}
                     placeholder="*"
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
-                  <span className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     Use * for all or comma-separated origins (e.g. http://localhost:3000)
-                  </span>
+                  </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Keep-Alive Heartbeat (Seconds)
                   </label>
@@ -383,14 +383,14 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                     type="number"
                     value={config.keepAliveSeconds}
                     onChange={(e) => updateConfig("keepAliveSeconds", Number(e.target.value))}
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
-                  <span className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     Prevents connection drops across persistent agent sessions
-                  </span>
+                  </p>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Max Request Payload (MB)
                   </label>
@@ -398,11 +398,11 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                     type="number"
                     value={config.maxPayloadMb}
                     onChange={(e) => updateConfig("maxPayloadMb", Number(e.target.value))}
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
-                  <span className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     Maximum body size for incoming tool argument payloads
-                  </span>
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -421,7 +421,7 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                 Enforce authentication tokens, rate limits, and subprocess command whitelisting
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-4">
               <div className="space-y-3">
                 <div className="flex items-start gap-3 rounded-lg border p-3 bg-muted/20">
                   <Checkbox
@@ -477,7 +477,7 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                 </div>
               </div>
 
-              <div className="space-y-1.5 pt-2">
+              <div className="flex flex-col gap-1.5 pt-2">
                 <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
                   <LockIcon className="size-3.5 text-primary" />
                   Allowed Executable Whitelist
@@ -485,26 +485,28 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                 <Input
                   value={config.executableWhitelist}
                   onChange={(e) => updateConfig("executableWhitelist", e.target.value)}
-                  className="font-mono text-xs"
+                  className="font-mono text-xs w-full"
                 />
-                <span className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   Commands that Stdio servers are authorized to invoke. Prevents arbitrary shell binary execution.
-                </span>
+                </p>
               </div>
 
-              <div className="space-y-1.5 pt-2">
-                <label className="text-xs font-medium text-foreground">
-                  Global Rate Limit (Requests / Minute per IP)
-                </label>
-                <Input
-                  type="number"
-                  value={config.rateLimitPerMinute}
-                  onChange={(e) => updateConfig("rateLimitPerMinute", Number(e.target.value))}
-                  className="font-mono text-xs max-w-xs"
-                />
-                <span className="text-[11px] text-muted-foreground">
-                  Protects MCP servers from DDoS or rogue LLM loop queries
-                </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-foreground">
+                    Global Rate Limit (Requests / Minute per IP)
+                  </label>
+                  <Input
+                    type="number"
+                    value={config.rateLimitPerMinute}
+                    onChange={(e) => updateConfig("rateLimitPerMinute", Number(e.target.value))}
+                    className="font-mono text-xs w-full"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Protects MCP servers from DDoS or rogue LLM loop queries
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -547,7 +549,7 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     RPC Request Timeout (ms)
                   </label>
@@ -555,14 +557,14 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                     type="number"
                     value={config.requestTimeoutMs}
                     onChange={(e) => updateConfig("requestTimeoutMs", Number(e.target.value))}
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
-                  <span className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     Timeout for handshake, tools/list, and ping calls (default: 30,000ms)
-                  </span>
+                  </p>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Tool Execution Timeout (ms)
                   </label>
@@ -570,11 +572,11 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                     type="number"
                     value={config.toolTimeoutMs}
                     onChange={(e) => updateConfig("toolTimeoutMs", Number(e.target.value))}
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
-                  <span className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     Maximum time allowed for a tool call to run before aborting
-                  </span>
+                  </p>
                 </div>
               </div>
 
@@ -614,19 +616,21 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                 </div>
               </div>
 
-              <div className="space-y-1.5 pt-2">
-                <label className="text-xs font-medium text-foreground">
-                  Max Auto-Restart Attempts
-                </label>
-                <Input
-                  type="number"
-                  value={config.maxRetries}
-                  onChange={(e) => updateConfig("maxRetries", Number(e.target.value))}
-                  className="font-mono text-xs max-w-xs"
-                />
-                <span className="text-[11px] text-muted-foreground">
-                  Circuit breaker: stops restart attempts after consecutive crashes
-                </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-foreground">
+                    Max Auto-Restart Attempts
+                  </label>
+                  <Input
+                    type="number"
+                    value={config.maxRetries}
+                    onChange={(e) => updateConfig("maxRetries", Number(e.target.value))}
+                    className="font-mono text-xs w-full"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Circuit breaker: stops restart attempts after consecutive crashes
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -681,19 +685,22 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Log File Storage Path
                   </label>
                   <Input
                     value={config.logPath}
                     onChange={(e) => updateConfig("logPath", e.target.value)}
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
+                  <p className="text-[11px] text-muted-foreground">
+                    Destination path for audit and transport log storage
+                  </p>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Max Total Log Size (MB)
                   </label>
@@ -701,8 +708,11 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
                     type="number"
                     value={config.maxLogMb}
                     onChange={(e) => updateConfig("maxLogMb", Number(e.target.value))}
-                    className="font-mono text-xs"
+                    className="font-mono text-xs w-full"
                   />
+                  <p className="text-[11px] text-muted-foreground">
+                    Maximum disk quota before automated rotation takes effect
+                  </p>
                 </div>
               </div>
             </CardContent>
