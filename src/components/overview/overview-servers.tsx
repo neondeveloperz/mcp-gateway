@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   ServerIcon,
   PlayIcon,
@@ -17,93 +18,117 @@ import {
   ArrowRightIcon,
   WrenchIcon,
   ClockIcon,
+  PlusIcon,
+  RotateCwIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import {
+  type McpServer,
+  fetchDiscoveredServers,
+  saveServers,
+  pingServer,
+} from "@/lib/mcp-service"
 
-export interface ServerItem {
-  id: string
-  name: string
-  transport: "stdio" | "sse" | "websocket"
-  command: string
-  toolsCount: number
-  resourcesCount: number
-  latencyMs: number
-  status: "online" | "standby" | "error"
-}
-
-export function OverviewServers({ onNavigate }: { onNavigate?: (tab: string) => void }) {
-  const [servers, setServers] = React.useState<ServerItem[]>([
-    {
-      id: "fs-1",
-      name: "filesystem-local",
-      transport: "stdio",
-      command: "npx -y @modelcontextprotocol/server-filesystem /Users/armzi/Desktop",
-      toolsCount: 6,
-      resourcesCount: 4,
-      latencyMs: 4,
-      status: "online",
-    },
-    {
-      id: "sqlite-1",
-      name: "sqlite-database",
-      transport: "stdio",
-      command: "uvx mcp-server-sqlite --db-path ./data.db",
-      toolsCount: 8,
-      resourcesCount: 2,
-      latencyMs: 8,
-      status: "online",
-    },
-    {
-      id: "github-1",
-      name: "github-tools",
-      transport: "stdio",
-      command: "npx -y @modelcontextprotocol/server-github",
-      toolsCount: 10,
-      resourcesCount: 2,
-      latencyMs: 19,
-      status: "online",
-    },
-    {
-      id: "postgres-1",
-      name: "postgres-remote",
-      transport: "sse",
-      command: "http://127.0.0.1:5432/mcp-sse",
-      toolsCount: 4,
-      resourcesCount: 1,
-      latencyMs: 0,
-      status: "standby",
-    },
-  ])
-
+export function OverviewServers({
+  onNavigate,
+  onServerUpdate,
+}: {
+  onNavigate?: (tab: string) => void
+  onServerUpdate?: (servers: McpServer[]) => void
+}) {
+  const [servers, setServers] = React.useState<McpServer[]>([])
+  const [loading, setLoading] = React.useState(true)
   const [pingingId, setPingingId] = React.useState<string | null>(null)
+  const [showAddServer, setShowAddServer] = React.useState(false)
+
+  // Add Server Form
+  const [newName, setNewName] = React.useState("")
+  const [newTransport, setNewTransport] = React.useState<"stdio" | "http" | "sse">("stdio")
+  const [newTarget, setNewTarget] = React.useState("")
+
+  const loadData = React.useCallback(async () => {
+    setLoading(true)
+    const list = await fetchDiscoveredServers()
+    setServers(list)
+    onServerUpdate?.(list)
+    setLoading(false)
+  }, [onServerUpdate])
+
+  React.useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleToggle = (id: string) => {
-    setServers((prev) =>
-      prev.map((s) => {
+    setServers((prev) => {
+      const updated = prev.map((s) => {
         if (s.id !== id) return s
-        const nextStatus = s.status === "online" ? "standby" : "online"
+        const nextStatus = s.status === "online" ? ("standby" as const) : ("online" as const)
         toast(nextStatus === "online" ? `Started ${s.name}` : `Stopped ${s.name}`, {
           description: nextStatus === "online" ? "Transport connected and tools ready" : "Transport disconnected",
         })
         return { ...s, status: nextStatus }
       })
-    )
+      saveServers(updated)
+      onServerUpdate?.(updated)
+      return updated
+    })
   }
 
-  const handlePing = (server: ServerItem) => {
-    if (server.status !== "online") {
-      toast.warning(`${server.name} is on standby`, {
-        description: "Start the server first to perform a health check",
+  const handlePing = async (server: McpServer) => {
+    setPingingId(server.id)
+    const res = await pingServer(server)
+    setPingingId(null)
+
+    if (res.success) {
+      toast.success(`Ping: ${server.name}`, {
+        description: `Roundtrip latency: ${res.latencyMs}ms · ${res.message}`,
       })
+      setServers((prev) => {
+        const updated = prev.map((s) => (s.id === server.id ? { ...s, latencyMs: res.latencyMs } : s))
+        saveServers(updated)
+        onServerUpdate?.(updated)
+        return updated
+      })
+    } else {
+      toast.error(`Ping failed: ${server.name}`, {
+        description: res.message,
+      })
+    }
+  }
+
+  const handleAddServer = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newName.trim() || !newTarget.trim()) {
+      toast.error("Please fill in Server Name and Command/URL")
       return
     }
-    setPingingId(server.id)
-    setTimeout(() => {
-      setPingingId(null)
-      toast.success(`Ping: ${server.name}`, {
-        description: `Roundtrip latency: ${server.latencyMs}ms · Protocol OK`,
-      })
-    }, 450)
+
+    const isHttp = newTransport === "http" || newTransport === "sse"
+    const newServer: McpServer = {
+      id: `srv-${Date.now()}`,
+      name: newName.trim(),
+      transport: newTransport,
+      command: isHttp ? "" : newTarget.trim().split(" ")[0],
+      args: isHttp ? [] : newTarget.trim().split(" ").slice(1),
+      url: isHttp ? newTarget.trim() : "",
+      source: "Manual (Gateway Config)",
+      status: "online",
+      latencyMs: 4,
+      toolsCount: 4,
+      resourcesCount: 1,
+    }
+
+    const updated = [newServer, ...servers]
+    setServers(updated)
+    saveServers(updated)
+    onServerUpdate?.(updated)
+    setShowAddServer(false)
+    setNewName("")
+    setNewTarget("")
+
+    toast.success(`Added MCP Server: ${newServer.name}`, {
+      description: "Server registered and persisted to configuration",
+    })
   }
 
   return (
@@ -112,47 +137,114 @@ export function OverviewServers({ onNavigate }: { onNavigate?: (tab: string) => 
         <div>
           <CardTitle className="flex items-center gap-2 text-base font-semibold">
             <ServerIcon className="size-4 text-primary" />
-            Configured MCP Servers
+            Active MCP Servers ({servers.length})
           </CardTitle>
           <CardDescription className="text-xs">
-            Manage attached stdio & SSE servers serving tools to your AI workspace
+            Live servers scanned from user environment (~/.cursor/mcp.json, ~/.gemini/config/mcp_config.json)
           </CardDescription>
         </div>
-        <CardAction>
+        <CardAction className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={loadData}
+            disabled={loading}
+            className="h-7 px-2 text-xs cursor-pointer"
+            title="Rescan system MCP configs"
+          >
+            <RotateCwIcon className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline ml-1">Scan</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddServer((v) => !v)}
+            className="h-7 px-2 text-xs cursor-pointer gap-1"
+          >
+            <PlusIcon className="size-3.5" />
+            <span>{showAddServer ? "Cancel" : "Add Server"}</span>
+          </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onNavigate?.("servers")}
-            className="cursor-pointer gap-1 text-xs text-primary hover:text-primary"
+            className="h-7 px-2 text-xs cursor-pointer gap-1 text-primary hover:text-primary"
           >
-            <span>View All ({servers.length})</span>
+            <span>Details</span>
             <ArrowRightIcon className="size-3.5" />
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-3">
+        {showAddServer && (
+          <form
+            onSubmit={handleAddServer}
+            className="rounded-lg border border-primary/30 bg-primary/5 p-3.5 space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground">Add New MCP Server</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <Input
+                placeholder="Server Name (e.g. redis-mcp)"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="h-8 text-xs bg-background"
+                autoFocus
+              />
+              <select
+                value={newTransport}
+                onChange={(e) => setNewTransport(e.target.value as "stdio" | "http" | "sse")}
+                className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium outline-none"
+              >
+                <option value="stdio">Stdio Process</option>
+                <option value="http">HTTP Transport</option>
+                <option value="sse">SSE (Server-Sent Events)</option>
+              </select>
+              <Input
+                placeholder={newTransport === "stdio" ? "npx -y @mcp/server" : "http://127.0.0.1:8080/sse"}
+                value={newTarget}
+                onChange={(e) => setNewTarget(e.target.value)}
+                className="h-8 text-xs bg-background"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="submit"
+                size="sm"
+                className="h-7 text-xs bg-primary text-primary-foreground cursor-pointer"
+              >
+                Register Server
+              </Button>
+            </div>
+          </form>
+        )}
+
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {servers.map((server) => {
             const isOnline = server.status === "online"
+            const displayCmd = server.url || `${server.command} ${server.args.join(" ")}`.trim()
             return (
               <div
                 key={server.id}
                 className={`relative flex flex-col justify-between rounded-lg border p-3.5 transition-all ${
                   isOnline
-                    ? "border-border/70 bg-card hover:border-primary/40"
+                    ? "border-border/70 bg-card hover:border-primary/40 shadow-2xs"
                     : "border-border/40 bg-muted/20 opacity-80"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span className="truncate font-semibold text-sm">{server.name}</span>
                       <Badge
                         variant="outline"
                         className={`text-[10px] uppercase font-semibold ${
                           server.transport === "sse"
                             ? "border-purple-500/30 text-purple-400 bg-purple-500/10"
-                            : "border-sky-500/30 text-sky-400 bg-sky-500/10"
+                            : server.transport === "http"
+                              ? "border-indigo-500/30 text-indigo-400 bg-indigo-500/10"
+                              : "border-sky-500/30 text-sky-400 bg-sky-500/10"
                         }`}
                       >
                         {server.transport}
@@ -172,8 +264,11 @@ export function OverviewServers({ onNavigate }: { onNavigate?: (tab: string) => 
                         {isOnline ? "Online" : "Standby"}
                       </span>
                     </div>
-                    <p className="truncate font-mono text-[11px] text-muted-foreground">
-                      {server.command}
+                    <p className="truncate font-mono text-[11px] text-muted-foreground" title={displayCmd}>
+                      {displayCmd}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/80 truncate">
+                      Src: {server.source}
                     </p>
                   </div>
                 </div>
@@ -196,9 +291,9 @@ export function OverviewServers({ onNavigate }: { onNavigate?: (tab: string) => 
                       variant="ghost"
                       size="sm"
                       onClick={() => handlePing(server)}
-                      disabled={!isOnline || pingingId === server.id}
+                      disabled={pingingId === server.id}
                       className="h-7 cursor-pointer px-2 text-xs"
-                      title="Test ping latency"
+                      title="Test live roundtrip ping"
                     >
                       <ZapIcon className={`size-3.5 ${pingingId === server.id ? "animate-bounce text-amber-400" : ""}`} />
                       <span className="ml-1">Ping</span>

@@ -1,3 +1,4 @@
+import * as React from "react"
 import {
   Card,
   CardAction,
@@ -14,25 +15,60 @@ import {
   ShieldCheckIcon,
   ArrowUpRightIcon,
 } from "lucide-react"
+import {
+  type McpServer,
+  type RpcLog,
+  fetchDiscoveredServers,
+  getRpcLogs,
+} from "@/lib/mcp-service"
 
-export function OverviewStats({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export function OverviewStats({
+  servers: propServers,
+  onNavigate,
+}: {
+  servers?: McpServer[]
+  onNavigate?: (tab: string) => void
+}) {
+  const [servers, setServers] = React.useState<McpServer[]>(propServers || [])
+  const [logs, setLogs] = React.useState<RpcLog[]>([])
+
+  React.useEffect(() => {
+    if (propServers) {
+      setServers(propServers)
+    } else {
+      fetchDiscoveredServers().then(setServers)
+    }
+    setLogs(getRpcLogs())
+  }, [propServers])
+
+  const onlineServers = servers.filter((s) => s.status === "online").length
+  const totalServers = servers.length
+  const totalTools = servers.reduce((acc, s) => acc + (s.toolsCount || 0), 0)
+  const totalCalls = logs.length
+  const avgLatency =
+    logs.length > 0
+      ? Math.round(logs.reduce((acc, l) => acc + l.latencyMs, 0) / logs.length)
+      : 8
+
   const stats = [
     {
       title: "Connected Servers",
-      value: "3 / 4",
+      value: `${onlineServers} / ${totalServers}`,
       unit: "Online",
-      description: "2 Stdio · 1 SSE · 1 Standby",
-      badge: "Healthy",
+      description: `${servers.filter((s) => s.transport === "stdio").length} Stdio · ${
+        servers.filter((s) => s.transport === "http" || s.transport === "sse").length
+      } Web/SSE`,
+      badge: onlineServers > 0 ? "Healthy" : "Standby",
       badgeVariant: "outline" as const,
-      badgeColor: "border-emerald-500/30 text-emerald-500 bg-emerald-500/10",
+      badgeColor: onlineServers > 0 ? "border-emerald-500/30 text-emerald-500 bg-emerald-500/10" : "border-amber-500/30 text-amber-500 bg-amber-500/10",
       icon: <ServerIcon className="size-4 text-emerald-500" />,
       onClick: () => onNavigate?.("servers"),
     },
     {
       title: "Registered Tools",
-      value: "24",
-      unit: "Ready",
-      description: "Available for LLM Function Calling",
+      value: totalTools.toString(),
+      unit: "Tools",
+      description: "Aggregated across all active servers",
       badge: "Validated",
       badgeVariant: "outline" as const,
       badgeColor: "border-sky-500/30 text-sky-500 bg-sky-500/10",
@@ -41,10 +77,10 @@ export function OverviewStats({ onNavigate }: { onNavigate?: (tab: string) => vo
     },
     {
       title: "RPC Calls Today",
-      value: "1,842",
+      value: totalCalls > 0 ? `${totalCalls} logged` : "0",
       unit: "Requests",
-      description: "Avg latency 12ms · 99.9% Success",
-      badge: "+18.2%",
+      description: `Avg latency ${avgLatency}ms · Local transport`,
+      badge: "Realtime",
       badgeVariant: "outline" as const,
       badgeColor: "border-primary/30 text-primary bg-primary/10",
       icon: <ActivityIcon className="size-4 text-primary" />,
@@ -54,8 +90,8 @@ export function OverviewStats({ onNavigate }: { onNavigate?: (tab: string) => vo
       title: "Client Sessions",
       value: "4",
       unit: "Clients",
-      description: "Claude, Cursor, CLI & IDE Agent",
-      badge: "TLS Guarded",
+      description: "Cursor, Gemini, CLI & Web IDE",
+      badge: "TLS & Tokens",
       badgeVariant: "outline" as const,
       badgeColor: "border-emerald-500/30 text-emerald-500 bg-emerald-500/10",
       icon: <ShieldCheckIcon className="size-4 text-emerald-500" />,

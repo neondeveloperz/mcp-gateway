@@ -34,6 +34,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { TokenManager } from "@/components/tokens/token-manager"
+import { fetchSystemInfo, type SystemInfo } from "@/lib/mcp-service"
 
 export interface GatewayConfig {
   // Network
@@ -110,6 +111,28 @@ export function SettingsView() {
 
   const [hasChanges, setHasChanges] = React.useState(false)
   const [isSaving, setIsSaving] = React.useState(false)
+  const [systemInfo, setSystemInfo] = React.useState<SystemInfo | null>(null)
+  const [uptimeSeconds, setUptimeSeconds] = React.useState<number>(15238)
+
+  React.useEffect(() => {
+    fetchSystemInfo().then((info) => {
+      setSystemInfo(info)
+      setUptimeSeconds(info.uptimeSecs)
+    })
+
+    const timer = setInterval(() => {
+      setUptimeSeconds((prev) => prev + 1)
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [])
+
+  const formatUptime = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    return `${hours}h ${minutes}m ${seconds}s`
+  }
 
   const updateConfig = <K extends keyof GatewayConfig>(key: K, value: GatewayConfig[K]) => {
     setConfig((prev) => ({ ...prev, [key]: value }))
@@ -221,19 +244,19 @@ export function SettingsView() {
         <div className="rounded-lg border bg-card/40 p-3 space-y-1">
           <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
             <CpuIcon className="size-3.5 text-primary" />
-            Daemon PID
+            Daemon PID / OS
           </span>
           <p className="font-mono text-xs font-semibold text-foreground">
-            34821 (Core Worker)
+            {systemInfo ? `${systemInfo.pid} (${systemInfo.os}-${systemInfo.arch})` : "Scanning..."}
           </p>
         </div>
         <div className="rounded-lg border bg-card/40 p-3 space-y-1">
           <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
             <HardDriveIcon className="size-3.5 text-sky-500" />
-            Resident Memory
+            Host / Memory
           </span>
-          <p className="font-mono text-xs font-semibold text-foreground">
-            48.2 MB / 512 MB
+          <p className="font-mono text-xs font-semibold text-foreground truncate" title={systemInfo?.hostname}>
+            {systemInfo ? `${systemInfo.hostname} · 48 MB` : "mac.local · 48 MB"}
           </p>
         </div>
         <div className="rounded-lg border bg-card/40 p-3 space-y-1">
@@ -242,7 +265,7 @@ export function SettingsView() {
             Gateway Uptime
           </span>
           <p className="font-mono text-xs font-semibold text-foreground">
-            4h 12m 38s
+            {formatUptime(uptimeSeconds)}
           </p>
         </div>
       </div>

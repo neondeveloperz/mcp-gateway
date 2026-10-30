@@ -5,9 +5,13 @@ import { CopyIcon, RotateCwIcon, PlusIcon, CheckIcon, RadioIcon, ShieldCheckIcon
 import { toast } from "sonner"
 
 export function OverviewHeader({
+  serversCount = 3,
+  toolsCount = 24,
   onAddServer,
   onNavigate,
 }: {
+  serversCount?: number
+  toolsCount?: number
   onAddServer?: () => void
   onNavigate?: (tab: string) => void
 }) {
@@ -37,9 +41,9 @@ export function OverviewHeader({
     setTimeout(() => {
       setIsRestarting(false)
       toast.success("Gateway Engine Ready", {
-        description: "All 3 active servers connected · 24 tools available",
+        description: `Active servers connected (${serversCount}) · ${toolsCount} tools available`,
       })
-    }, 1200)
+    }, 900)
   }
 
   return (
@@ -104,4 +108,3 @@ export function OverviewHeader({
     </div>
   )
 }
-

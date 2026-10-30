@@ -25,9 +25,31 @@ import {
   CircleHelpIcon,
   CpuIcon,
 } from "lucide-react"
+import { fetchDiscoveredServers, type McpServer } from "@/lib/mcp-service"
 
-const sidebarData = {
-  navMain: [
+export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  activeItem?: string
+  onSelectItem?: (id: string) => void
+  onAddServer?: () => void
+}
+
+export function AppSidebar({
+  activeItem = "overview",
+  onSelectItem,
+  onAddServer,
+  ...props
+}: AppSidebarProps) {
+  const [servers, setServers] = React.useState<McpServer[]>([])
+
+  React.useEffect(() => {
+    fetchDiscoveredServers().then(setServers)
+  }, [])
+
+  const onlineServers = servers.filter((s) => s.status === "online").length
+  const totalTools = servers.reduce((acc, s) => acc + (s.toolsCount || 0), 0)
+  const totalResources = servers.reduce((acc, s) => acc + (s.resourcesCount || 0), 0)
+
+  const navMain: NavMainItem[] = [
     {
       id: "overview",
       title: "Overview",
@@ -38,21 +60,21 @@ const sidebarData = {
       id: "servers",
       title: "MCP Servers",
       url: "#servers",
-      badge: "3 Active",
+      badge: `${onlineServers} Active`,
       icon: <ServerIcon className="size-4" />,
     },
     {
       id: "tools",
       title: "Tools Explorer",
       url: "#tools",
-      badge: "24",
+      badge: totalTools > 0 ? totalTools.toString() : "0",
       icon: <WrenchIcon className="size-4" />,
     },
     {
       id: "resources",
       title: "Resources & Prompts",
       url: "#resources",
-      badge: "8",
+      badge: totalResources > 0 ? totalResources.toString() : "0",
       icon: <FolderCodeIcon className="size-4" />,
     },
     {
@@ -62,8 +84,9 @@ const sidebarData = {
       badge: "Live",
       icon: <ActivityIcon className="size-4" />,
     },
-  ] satisfies NavMainItem[],
-  management: [
+  ]
+
+  const management: NavDocumentItem[] = [
     {
       id: "keys",
       name: "API Keys & Tokens",
@@ -82,8 +105,9 @@ const sidebarData = {
       url: "#settings",
       icon: <Settings2Icon className="size-4" />,
     },
-  ] satisfies NavDocumentItem[],
-  navSecondary: [
+  ]
+
+  const navSecondary: NavSecondaryItem[] = [
     {
       id: "docs",
       title: "Documentation",
@@ -102,21 +126,8 @@ const sidebarData = {
       url: "#help",
       icon: <CircleHelpIcon className="size-4" />,
     },
-  ] satisfies NavSecondaryItem[],
-}
+  ]
 
-export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  activeItem?: string
-  onSelectItem?: (id: string) => void
-  onAddServer?: () => void
-}
-
-export function AppSidebar({
-  activeItem = "overview",
-  onSelectItem,
-  onAddServer,
-  ...props
-}: AppSidebarProps) {
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -141,19 +152,19 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain
-          items={sidebarData.navMain}
+          items={navMain}
           activeItem={activeItem}
           onSelectItem={onSelectItem}
           onAddServer={onAddServer}
         />
         <NavDocuments
           label="Security & Management"
-          items={sidebarData.management}
+          items={management}
           activeItem={activeItem}
           onSelectItem={onSelectItem}
         />
         <NavSecondary
-          items={sidebarData.navSecondary}
+          items={navSecondary}
           activeItem={activeItem}
           onSelectItem={onSelectItem}
           className="mt-auto"
