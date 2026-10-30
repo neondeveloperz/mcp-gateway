@@ -38,7 +38,17 @@ export interface RpcLog {
 }
 
 const SERVERS_STORAGE_KEY = "mcp_gateway_user_servers_v3"
-const RPC_LOGS_STORAGE_KEY = "mcp_gateway_rpc_logs_v2"
+const RPC_LOGS_STORAGE_KEY = "mcp_gateway_rpc_logs_v3"
+
+// Clear old legacy seed keys from previous versions
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem("mcp_gateway_rpc_logs_v2")
+    localStorage.removeItem("mcp_gateway_servers_v2")
+  } catch {
+    // ignore
+  }
+}
 
 export async function fetchSystemInfo(): Promise<SystemInfo> {
   if (isTauri()) {
@@ -270,7 +280,7 @@ export function getRpcLogs(): RpcLog[] {
       const saved = localStorage.getItem(RPC_LOGS_STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed
         }
       }
@@ -278,129 +288,7 @@ export function getRpcLogs(): RpcLog[] {
       // ignore
     }
   }
-
-  const initialLogs: RpcLog[] = [
-    {
-      id: "log-1",
-      time: new Date(Date.now() - 45000).toLocaleTimeString("en-US", { hour12: false }),
-      method: "tools/call",
-      server: "9remote",
-      target: "get_remote_session",
-      latencyMs: 3,
-      status: "success",
-      details: "HTTP 200 OK",
-      clientIp: "127.0.0.1",
-      transport: "http",
-      requestPayload: JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          id: "req-9remote-01",
-          method: "tools/call",
-          params: {
-            name: "get_remote_session",
-            arguments: { sessionId: "sess_live_9941a" },
-          },
-        },
-        null,
-        2
-      ),
-      responsePayload: JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          id: "req-9remote-01",
-          result: {
-            status: "active",
-            protocol: "mcp/1.0",
-            tunnel: "connected",
-            activeStreams: 1,
-          },
-        },
-        null,
-        2
-      ),
-    },
-    {
-      id: "log-2",
-      time: new Date(Date.now() - 95000).toLocaleTimeString("en-US", { hour12: false }),
-      method: "tools/list",
-      server: "rea",
-      target: "list_binary_tools",
-      latencyMs: 14,
-      status: "success",
-      details: "142 tools registered",
-      clientIp: "127.0.0.1",
-      transport: "stdio",
-      requestPayload: JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          id: "req-rea-02",
-          method: "tools/list",
-          params: {},
-        },
-        null,
-        2
-      ),
-      responsePayload: JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          id: "req-rea-02",
-          result: {
-            tools: [
-              { name: "read_function_instructions", description: "Disassemble native instructions" },
-              { name: "procedure_pseudo_code", description: "Decompile procedure into C pseudocode" },
-              { name: "inspect_native_instruction", description: "Inspect operands and flags" },
-              { name: "xrefs", description: "Query cross references to address" },
-            ],
-            total: 142,
-          },
-        },
-        null,
-        2
-      ),
-    },
-    {
-      id: "log-3",
-      time: new Date(Date.now() - 180000).toLocaleTimeString("en-US", { hour12: false }),
-      method: "tools/call",
-      server: "sqlite",
-      target: "query_database",
-      latencyMs: 6,
-      status: "success",
-      details: "Execution completed",
-      clientIp: "127.0.0.1",
-      transport: "stdio",
-      requestPayload: JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          id: "req-sqlite-03",
-          method: "tools/call",
-          params: {
-            name: "read_query",
-            arguments: { query: "SELECT * FROM schema_migrations ORDER BY version DESC LIMIT 5;" },
-          },
-        },
-        null,
-        2
-      ),
-      responsePayload: JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          id: "req-sqlite-03",
-          result: {
-            rows: [
-              { version: "20261025001", name: "init_tables" },
-              { version: "20261028002", name: "add_mcp_routing_indices" },
-            ],
-            rowCount: 2,
-          },
-        },
-        null,
-        2
-      ),
-    },
-  ]
-  saveRpcLogs(initialLogs)
-  return initialLogs
+  return []
 }
 
 export function saveRpcLogs(logs: RpcLog[]) {

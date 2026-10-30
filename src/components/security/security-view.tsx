@@ -70,85 +70,28 @@ export interface SecurityPolicies {
 
 const defaultPolicies: SecurityPolicies = {
   enforcePathBounds: true,
-  allowedPaths: ["/Users/armzi/Desktop", "/Users/armzi/Downloads", "/Users/armzi/projects"],
+  allowedPaths: [],
   blockedPaths: ["~/.ssh", "~/.aws", "~/.gnupg", "/etc/passwd", "/etc/shadow", "/var/run/docker.sock"],
   blockRawShellExecution: true,
   requireTokenForExternal: true,
   maxConcurrentCallsPerClient: 8,
-  ipAllowlist: ["127.0.0.1", "::1", "192.168.1.0/24"],
+  ipAllowlist: ["127.0.0.1", "::1"],
   blockDockerPrivileged: true,
   redactPiiAndCredentials: true,
 }
 
-const defaultToolRules: ToolRule[] = [
-  {
-    id: "rule-1",
-    serverName: "rea",
-    toolPattern: "read_* / inspect_*",
-    description: "Binary disassembly, function decompilation and static symbol lookup",
-    permission: "auto-allow",
-    riskLevel: "low",
-  },
-  {
-    id: "rule-2",
-    serverName: "rea",
-    toolPattern: "instrument_with_frida / hook_*",
-    description: "Dynamic process memory patching and native runtime instrumentation",
-    permission: "prompt-confirm",
-    riskLevel: "high",
-  },
-  {
-    id: "rule-3",
-    serverName: "sqlite",
-    toolPattern: "read_query / list_tables",
-    description: "Read-only SQL queries (SELECT, PRAGMA)",
-    permission: "auto-allow",
-    riskLevel: "low",
-  },
-  {
-    id: "rule-4",
-    serverName: "sqlite",
-    toolPattern: "execute_query (INSERT / UPDATE)",
-    description: "Database modification queries",
-    permission: "prompt-confirm",
-    riskLevel: "medium",
-  },
-  {
-    id: "rule-5",
-    serverName: "sqlite",
-    toolPattern: "DROP TABLE / ALTER / ATTACH",
-    description: "Destructive schema dropping or database file attachment",
-    permission: "block",
-    riskLevel: "critical",
-  },
-  {
-    id: "rule-6",
-    serverName: "docker",
-    toolPattern: "list_containers / logs",
-    description: "Container observation and status inspect",
-    permission: "auto-allow",
-    riskLevel: "low",
-  },
-  {
-    id: "rule-7",
-    serverName: "docker",
-    toolPattern: "run_container / exec",
-    description: "Spawning new container processes on local Docker daemon",
-    permission: "prompt-confirm",
-    riskLevel: "high",
-  },
-  {
-    id: "rule-8",
-    serverName: "9remote",
-    toolPattern: "*",
-    description: "Remote tunnel protocol access (Bearer Token Guarded)",
-    permission: "auto-allow",
-    riskLevel: "medium",
-  },
-]
+const POLICIES_STORAGE_KEY = "mcp_gateway_security_policies_v3"
+const RULES_STORAGE_KEY = "mcp_gateway_tool_rules_v3"
 
-const POLICIES_STORAGE_KEY = "mcp_gateway_security_policies_v2"
-const RULES_STORAGE_KEY = "mcp_gateway_tool_rules_v2"
+// Clear old legacy seed keys from previous versions
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem("mcp_gateway_security_policies_v2")
+    localStorage.removeItem("mcp_gateway_tool_rules_v2")
+  } catch {
+    // ignore
+  }
+}
 
 export function SecurityView() {
   const [servers, setServers] = React.useState<McpServer[]>([])
@@ -173,7 +116,7 @@ export function SecurityView() {
         // ignore
       }
     }
-    return defaultToolRules
+    return []
   })
 
   const [isAuditing, setIsAuditing] = React.useState(false)

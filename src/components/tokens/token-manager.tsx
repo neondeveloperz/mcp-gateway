@@ -44,7 +44,16 @@ export interface TokenItem {
   status: "active" | "revoked"
 }
 
-const TOKENS_STORAGE_KEY = "mcp_gateway_tokens_v1"
+const TOKENS_STORAGE_KEY = "mcp_gateway_tokens_v2"
+
+// Clear old legacy seed keys from previous versions
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem("mcp_gateway_tokens_v1")
+  } catch {
+    // ignore
+  }
+}
 
 function generateCryptoToken(prefix = "mcp_live_"): string {
   const bytes = new Uint8Array(24)
@@ -68,47 +77,6 @@ function maskToken(token: string): string {
   return `${prefix}••••••••${suffix}`
 }
 
-function getInitialTokens(): TokenItem[] {
-  const t1 = generateCryptoToken()
-  const t2 = generateCryptoToken()
-  const t3 = generateCryptoToken()
-  return [
-    {
-      id: "tok-1",
-      name: "Claude Desktop",
-      token: t1,
-      maskedToken: maskToken(t1),
-      scope: "full",
-      createdAt: "2 days ago",
-      expiresAt: "Never",
-      lastUsed: "Just now",
-      status: "active",
-    },
-    {
-      id: "tok-2",
-      name: "Cursor IDE Extension",
-      token: t2,
-      maskedToken: maskToken(t2),
-      scope: "full",
-      createdAt: "5 days ago",
-      expiresAt: "90 days",
-      lastUsed: "18m ago",
-      status: "active",
-    },
-    {
-      id: "tok-3",
-      name: "Antigravity CLI Agent",
-      token: t3,
-      maskedToken: maskToken(t3),
-      scope: "tools-only",
-      createdAt: "1 week ago",
-      expiresAt: "1 year",
-      lastUsed: "Yesterday",
-      status: "active",
-    },
-  ]
-}
-
 export function TokenManager() {
   const [tokens, setTokens] = React.useState<TokenItem[]>(() => {
     if (typeof window !== "undefined") {
@@ -116,10 +84,10 @@ export function TokenManager() {
         const saved = localStorage.getItem(TOKENS_STORAGE_KEY)
         if (saved) return JSON.parse(saved)
       } catch {
-        // Fallback to initial
+        // Fallback to empty
       }
     }
-    return getInitialTokens()
+    return []
   })
 
   // Generator form state

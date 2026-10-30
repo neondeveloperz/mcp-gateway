@@ -155,7 +155,9 @@ export function TrafficLogsView() {
     // Pick the first online server or default to 9remote / rea
     const targetServer = servers.find((s) => s.status === "online") || servers[0]
     if (!targetServer) {
-      toast.error("No servers available to test")
+      toast.error("No MCP servers registered", {
+        description: "Please add an MCP server in 'MCP Servers' before sending test RPC calls.",
+      })
       setIsSendingTest(false)
       return
     }
@@ -488,8 +490,14 @@ export function TrafficLogsView() {
               <TableBody>
                 {filteredLogs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-12 text-center text-xs text-muted-foreground">
-                      No JSON-RPC logs found matching current filters.
+                    <TableCell colSpan={8} className="py-16 text-center text-xs text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <TerminalIcon className="size-8 text-muted-foreground/60" />
+                        <span className="font-semibold text-foreground text-sm">No JSON-RPC Traffic Recorded</span>
+                        <p className="text-xs text-muted-foreground max-w-sm">
+                          Logs will appear here in real-time as AI agents invoke tools and execute requests through the gateway.
+                        </p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
