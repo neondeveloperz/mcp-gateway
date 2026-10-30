@@ -2,10 +2,16 @@ import { useState, type CSSProperties } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { OverviewView } from "@/components/overview/overview-view"
-import { SettingsView } from "@/components/settings/settings-view"
+import { ServersView } from "@/components/servers/servers-view"
+import { ToolsView } from "@/components/tools/tools-view"
+import { ResourcesView } from "@/components/resources/resources-view"
+import { TrafficLogsView } from "@/components/logs/traffic-logs-view"
 import { ApiKeysView } from "@/components/tokens/api-keys-view"
 import { SecurityView } from "@/components/security/security-view"
-import { TrafficLogsView } from "@/components/logs/traffic-logs-view"
+import { SettingsView } from "@/components/settings/settings-view"
+import { DocsView } from "@/components/docs/docs-view"
+import { StatusView } from "@/components/status/status-view"
+import { HelpView } from "@/components/help/help-view"
 import {
   SidebarInset,
   SidebarProvider,
@@ -49,14 +55,26 @@ export default function App() {
         <SidebarInset>
           <SiteHeader title={tabTitles[activeTab] ?? "Overview"} />
           <main className="flex-1 overflow-y-auto">
-            {activeTab === "settings" ? (
-              <SettingsView onNavigate={setActiveTab} />
+            {activeTab === "servers" ? (
+              <ServersView />
+            ) : activeTab === "tools" ? (
+              <ToolsView />
+            ) : activeTab === "resources" ? (
+              <ResourcesView />
+            ) : activeTab === "logs" ? (
+              <TrafficLogsView />
             ) : activeTab === "keys" ? (
               <ApiKeysView />
             ) : activeTab === "security" ? (
               <SecurityView />
-            ) : activeTab === "logs" ? (
-              <TrafficLogsView />
+            ) : activeTab === "settings" ? (
+              <SettingsView onNavigate={setActiveTab} />
+            ) : activeTab === "docs" ? (
+              <DocsView />
+            ) : activeTab === "status" ? (
+              <StatusView />
+            ) : activeTab === "help" ? (
+              <HelpView />
             ) : (
               <OverviewView
                 onNavigate={setActiveTab}
