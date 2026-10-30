@@ -4,12 +4,10 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { MenuBadge, type BadgeVariant } from "@/components/nav-badge"
-import { cn } from "@/lib/utils"
 
 export interface NavDocumentItem {
   id: string
@@ -43,16 +41,16 @@ export function NavDocuments({
                 tooltip={item.name}
                 isActive={isCurrentActive}
                 onClick={() => onSelectItem?.(item.id)}
-                className={cn("cursor-pointer", item.badge != null && "pr-20")}
+                className="cursor-pointer"
               >
                 {item.icon}
-                <span>{item.name}</span>
+                <span className="flex-1 truncate">{item.name}</span>
+                {item.badge != null && (
+                  <span className="ml-auto shrink-0 group-data-[collapsible=icon]:hidden">
+                    <MenuBadge badge={item.badge} variant={item.badgeVariant} />
+                  </span>
+                )}
               </SidebarMenuButton>
-              {item.badge != null && (
-                <SidebarMenuBadge className="right-2 h-auto pointer-events-none">
-                  <MenuBadge badge={item.badge} variant={item.badgeVariant} />
-                </SidebarMenuBadge>
-              )}
             </SidebarMenuItem>
           )
         })}

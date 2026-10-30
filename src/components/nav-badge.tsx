@@ -30,7 +30,7 @@ export function MenuBadge({ badge, variant, className }: MenuBadgeProps) {
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400 shadow-2xs",
+          "inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400 shadow-2xs",
           className
         )}
       >
@@ -79,3 +79,4 @@ export function MenuBadge({ badge, variant, className }: MenuBadgeProps) {
     </span>
   )
 }
+
