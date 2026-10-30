@@ -158,7 +158,7 @@ export function SettingsView() {
   const isPublicHost = config.host === "0.0.0.0"
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6 max-w-6xl mx-auto">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
       {/* Top Banner & Quick Actions */}
       <div className="flex flex-col gap-4 rounded-xl border bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">

@@ -176,6 +176,16 @@ body {
   code {
     @apply select-text;
   }
+
+  /* Clean number inputs without browser spinner steppers */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
 }
 
 @layer utilities {
