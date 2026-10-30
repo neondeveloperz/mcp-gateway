@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
-use std::net::{TcpStream, ToSocketAddrs};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
@@ -386,11 +387,259 @@ fn external_navigation_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin
         .build()
 }
 
+fn handle_json_rpc(body_str: &str) -> serde_json::Value {
+    let Ok(val) = serde_json::from_str::<serde_json::Value>(body_str) else {
+        return serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": { "code": -32700, "message": "Parse error" }
+        });
+    };
+
+    let id = val.get("id").cloned().unwrap_or(serde_json::Value::Null);
+    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
+    let params = val.get("params").cloned().unwrap_or(serde_json::json!({}));
+
+    match method {
+        "initialize" => {
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": { "listChanged": true },
+                        "resources": { "listChanged": false },
+                        "prompts": { "listChanged": false }
+                    },
+                    "serverInfo": {
+                        "name": "mcp-gateway-native",
+                        "version": "1.0.0"
+                    }
+                }
+            })
+        }
+        "notifications/initialized" => {
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "result": {}
+            })
+        }
+        "ping" => {
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {}
+            })
+        }
+        "tools/list" => {
+            let payload = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": format!("tools-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)),
+                "method": "tools/list",
+                "params": {}
+            }).to_string();
+
+            let coolify_url = "http://45.136.237.171:8000/mcp".to_string();
+            let coolify_token = Some("6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded".to_string());
+
+            if let Ok(res_str) = execute_remote_mcp(coolify_url, coolify_token, payload) {
+                if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
+                    if let Some(tools) = downstream_json.get("result").and_then(|r| r.get("tools")) {
+                        return serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "id": id,
+                            "result": {
+                                "tools": tools
+                            }
+                        });
+                    }
+                }
+            }
+
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": { "tools": [] }
+            })
+        }
+        "tools/call" => {
+            let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+            let arguments = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+
+            let payload = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": format!("call-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)),
+                "method": "tools/call",
+                "params": {
+                    "name": tool_name,
+                    "arguments": arguments
+                }
+            }).to_string();
+
+            let coolify_url = "http://45.136.237.171:8000/mcp".to_string();
+            let coolify_token = Some("6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded".to_string());
+
+            if let Ok(res_str) = execute_remote_mcp(coolify_url, coolify_token, payload) {
+                if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
+                    if let Some(res) = downstream_json.get("result") {
+                        return serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "id": id,
+                            "result": res
+                        });
+                    } else if let Some(err) = downstream_json.get("error") {
+                        return serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "id": id,
+                            "error": err
+                        });
+                    }
+                }
+            }
+
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": { "code": -32603, "message": "Failed to execute tool on downstream server" }
+            })
+        }
+        _ => {
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": { "code": -32601, "message": format!("Method '{}' not found", method) }
+            })
+        }
+    }
+}
+
+fn handle_gateway_client(mut stream: TcpStream) {
+    let Ok(clone_stream) = stream.try_clone() else { return; };
+    let mut reader = BufReader::new(clone_stream);
+    let mut first_line = String::new();
+    if reader.read_line(&mut first_line).is_err() || first_line.is_empty() {
+        return;
+    }
+
+    let parts: Vec<&str> = first_line.trim().split_whitespace().collect();
+    if parts.len() < 2 {
+        return;
+    }
+    let method = parts[0];
+    let path = parts[1];
+
+    let mut content_length = 0usize;
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).is_err() || line == "\r\n" || line == "\n" || line.is_empty() {
+            break;
+        }
+        let lower = line.to_lowercase();
+        if lower.starts_with("content-length:") {
+            if let Some(val) = line.split(':').nth(1) {
+                content_length = val.trim().parse().unwrap_or(0);
+            }
+        }
+    }
+
+    if method == "OPTIONS" {
+        let response = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization\r\nConnection: close\r\n\r\n";
+        let _ = stream.write_all(response.as_bytes());
+        return;
+    }
+
+    if method == "GET" && (path == "/" || path == "/health") {
+        let json_body = serde_json::json!({
+            "status": "healthy",
+            "gateway": "mcp-gateway-native",
+            "version": "1.0.0",
+            "port": 8080,
+            "activeDownstreamServers": ["Coolify"],
+            "sseEndpoint": "http://127.0.0.1:8080/sse"
+        }).to_string();
+
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            json_body.len(),
+            json_body
+        );
+        let _ = stream.write_all(response.as_bytes());
+        return;
+    }
+
+    if method == "GET" && path.starts_with("/sse") {
+        let session_id = format!("sess-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
+        let headers = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
+        let _ = stream.write_all(headers.as_bytes());
+        let _ = stream.flush();
+
+        let endpoint_event = format!("event: endpoint\r\ndata: /messages?sessionId={}\r\n\r\n", session_id);
+        let _ = stream.write_all(endpoint_event.as_bytes());
+        let _ = stream.flush();
+
+        loop {
+            std::thread::sleep(Duration::from_secs(15));
+            if stream.write_all(b": keep-alive\r\n\r\n").is_err() {
+                break;
+            }
+            let _ = stream.flush();
+        }
+        return;
+    }
+
+    if method == "POST" && (path.starts_with("/messages") || path == "/mcp" || path == "/") {
+        let mut body = vec![0u8; content_length];
+        if content_length > 0 {
+            let _ = reader.read_exact(&mut body);
+        }
+        let body_str = String::from_utf8_lossy(&body).to_string();
+
+        let rpc_result = handle_json_rpc(&body_str);
+        let json_res = serde_json::to_string(&rpc_result).unwrap_or_else(|_| "{}".to_string());
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            json_res.len(),
+            json_res
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+        return;
+    }
+
+    let not_found = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let _ = stream.write_all(not_found.as_bytes());
+}
+
+fn start_embedded_gateway(port: u16) {
+    let addr = format!("127.0.0.1:{}", port);
+    match TcpListener::bind(&addr) {
+        Ok(listener) => {
+            log::info!("🚀 Native Gateway Core listening on http://{}", addr);
+            for stream in listener.incoming() {
+                if let Ok(stream) = stream {
+                    std::thread::spawn(move || {
+                        handle_gateway_client(stream);
+                    });
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("Failed to bind native Gateway Core on {}: {}", addr, e);
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     APP_START.get_or_init(Instant::now);
 
     tauri::Builder::default()
+        .setup(|_app| {
+            std::thread::spawn(|| {
+                start_embedded_gateway(8080);
+            });
+            Ok(())
+        })
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([

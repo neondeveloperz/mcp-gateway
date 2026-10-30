@@ -10,7 +10,6 @@
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "gateway": "bun run server/gateway.ts",
     "tauri": "tauri"
   },
   "dependencies": {
