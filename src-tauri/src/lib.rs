@@ -382,18 +382,32 @@ fn execute_remote_mcp(
         .arg("-m")
         .arg("12")
         .arg("-X")
-        .arg("POST")
-        .arg("-H")
-        .arg("Content-Type: application/json");
+        .arg("POST");
 
     let mut has_auth = false;
+    let mut has_accept = false;
+    let mut has_content_type = false;
+
     if let Some(hdrs) = headers {
         for (k, v) in hdrs {
             if k.eq_ignore_ascii_case("authorization") {
                 has_auth = true;
             }
+            if k.eq_ignore_ascii_case("accept") {
+                has_accept = true;
+            }
+            if k.eq_ignore_ascii_case("content-type") {
+                has_content_type = true;
+            }
             cmd.arg("-H").arg(format!("{}: {}", k, v));
         }
+    }
+
+    if !has_content_type {
+        cmd.arg("-H").arg("Content-Type: application/json");
+    }
+    if !has_accept {
+        cmd.arg("-H").arg("Accept: application/json, text/event-stream");
     }
 
     if !has_auth {

@@ -407,9 +407,10 @@ export async function fetchRemoteTools(server: McpServer): Promise<McpTool[]> {
     if (!json) {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
         ...(server.headers || {}),
       }
-      if (server.authToken && !headers["Authorization"]) {
+      if (server.authToken && !headers["Authorization"] && !headers["authorization"]) {
         headers["Authorization"] = server.authToken.startsWith("Bearer ")
           ? server.authToken
           : `Bearer ${server.authToken}`
@@ -561,6 +562,7 @@ export async function executeMcpTool(
         const raw = await invoke<string>("execute_remote_mcp", {
           url: server.url,
           authToken: effectiveToken,
+          headers: server.headers || null,
           payload,
         })
         json = JSON.parse(raw)
@@ -573,9 +575,10 @@ export async function executeMcpTool(
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
+          "Accept": "application/json, text/event-stream",
           ...(server.headers || {}),
         }
-        if (server.authToken && !headers["Authorization"]) {
+        if (server.authToken && !headers["Authorization"] && !headers["authorization"]) {
           headers["Authorization"] = server.authToken.startsWith("Bearer ")
             ? server.authToken
             : `Bearer ${server.authToken}`
@@ -605,37 +608,8 @@ export async function executeMcpTool(
       }
     }
   } else {
-    await new Promise((resolve) => setTimeout(resolve, 80 + Math.random() * 60))
-
-    if (toolName === "read_function_instructions") {
-      resultData = [
-        { offset: "0x100003fa0", mnemonic: "stp", operands: "x29, x30, [sp, #-0x10]!" },
-        { offset: "0x100003fa4", mnemonic: "mov", operands: "x29, sp" },
-        { offset: "0x100003fa8", mnemonic: "sub", operands: "sp, sp, #0x20" },
-        { offset: "0x100003fac", mnemonic: "bl", operands: "_security_token_validate" },
-        { offset: "0x100003fb0", mnemonic: "cbnz", operands: "w0, 0x100003fc4" },
-      ]
-    } else if (toolName === "procedure_pseudo_code") {
-      resultData = `int handle_mcp_request(struct mcp_frame *frame) {
-      if (!frame || !frame->payload) return -1;
-      if (security_check(frame->token) != 0) {
-          mcp_log_violation(frame->client_ip);
-          return 403;
-      }
-      return route_dispatch(frame);
-  }`
-    } else if (toolName === "read_query" || toolName === "list_tables") {
-      resultData = [
-        { name: "users", type: "table", count: 12 },
-        { name: "api_keys", type: "table", count: 4 },
-        { name: "audit_logs", type: "table", count: 148 },
-      ]
-    } else if (toolName === "list_containers") {
-      resultData = [
-        { id: "c49f81a0e", name: "redis-cache", image: "redis:7-alpine", status: "Up 2 days", ports: "6379/tcp" },
-        { id: "e1082c4da", name: "postgres-dev", image: "postgres:16-alpine", status: "Up 4 hours", ports: "5432/tcp" },
-      ]
-    }
+    isSuccess = false
+    resultData = { error: "Server endpoint not configured or offline" }
   }
 
   const latency = Math.max(1, Math.round(performance.now() - started))
