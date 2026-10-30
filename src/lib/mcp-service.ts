@@ -112,13 +112,9 @@ export function subscribeToServers(callback: (servers: McpServer[]) => void): ()
   // Initial call
   handleUpdate()
 
-  // Periodic poll to ensure real-time consistency
-  const timer = setInterval(handleUpdate, 1000)
-
   return () => {
     window.removeEventListener(MCP_SERVERS_EVENT, handleUpdate)
     window.removeEventListener("storage", handleUpdate)
-    clearInterval(timer)
   }
 }
 

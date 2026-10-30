@@ -62,22 +62,22 @@ export function ToolsView() {
   const [executionLatency, setExecutionLatency] = React.useState<number | null>(null)
   const [isLoading, setIsLoading] = React.useState(false)
 
-  const reloadTools = React.useCallback(async () => {
-    setIsLoading(true)
+  const reloadTools = React.useCallback(async (showLoading = false) => {
+    if (showLoading) setIsLoading(true)
     try {
       const discoveredTools = await fetchDiscoveredTools()
       setTools(discoveredTools)
       const list = await fetchDiscoveredServers()
       setServers(list)
     } finally {
-      setIsLoading(false)
+      if (showLoading) setIsLoading(false)
     }
   }, [])
 
   React.useEffect(() => {
-    reloadTools()
+    reloadTools(false)
     const unsubscribe = subscribeToServers(() => {
-      reloadTools()
+      reloadTools(false)
     })
     return unsubscribe
   }, [reloadTools])
@@ -186,7 +186,7 @@ export function ToolsView() {
           <Button
             variant="outline"
             size="sm"
-            onClick={reloadTools}
+            onClick={() => reloadTools(true)}
             disabled={isLoading}
             className="cursor-pointer gap-1.5 text-xs h-8"
             title="Reload tools"
@@ -278,7 +278,7 @@ export function ToolsView() {
                         {servers.length > 0 && (
                           <Button
                             size="sm"
-                            onClick={reloadTools}
+                            onClick={() => reloadTools(true)}
                             disabled={isLoading}
                             className="gap-1.5 text-xs h-8 cursor-pointer mt-1 bg-primary text-primary-foreground font-medium"
                           >
