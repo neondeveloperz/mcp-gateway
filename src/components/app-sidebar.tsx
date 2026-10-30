@@ -3,11 +3,9 @@ import * as React from "react"
 import { NavDocuments, type NavDocumentItem } from "@/components/nav-documents"
 import { NavMain, type NavMainItem } from "@/components/nav-main"
 import { NavSecondary, type NavSecondaryItem } from "@/components/nav-secondary"
-import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -29,11 +27,6 @@ import {
 } from "lucide-react"
 
 const sidebarData = {
-  user: {
-    name: "Gateway Admin",
-    email: "admin@mcpgateway.local",
-    avatar: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' rx='24' fill='%23181f2a'/%3E%3Ccircle cx='48' cy='34' r='18' fill='%2338bdf8'/%3E%3Cpath d='M18 82c6-14 18-22 30-22s24 8 30 22' fill='%2338bdf8'/%3E%3C/svg%3E",
-  },
   navMain: [
     {
       id: "overview",
@@ -166,9 +159,6 @@ export function AppSidebar({
           className="mt-auto"
         />
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={sidebarData.user} />
-      </SidebarFooter>
     </Sidebar>
   )
 }
