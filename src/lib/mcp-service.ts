@@ -141,22 +141,7 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
 }
 
 export async function fetchDiscoveredServers(): Promise<McpServer[]> {
-  // Check localStorage first
-  if (typeof window !== "undefined") {
-    try {
-      const saved = localStorage.getItem(SERVERS_STORAGE_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  // If in Tauri, scan the filesystem directly
+  // If in Tauri, scan the filesystem directly first
   if (isTauri()) {
     try {
       const discovered = await invoke<
@@ -174,24 +159,45 @@ export async function fetchDiscoveredServers(): Promise<McpServer[]> {
       >("discover_mcp_servers")
 
       if (discovered && discovered.length > 0) {
-        const mapped: McpServer[] = discovered.map((d) => ({
-          id: d.id,
-          name: d.name,
-          transport: d.transport,
-          command: d.command,
-          args: d.args,
-          url: d.url,
-          source: d.source,
-          status: (d.status === "online" ? "online" : "standby") as McpServer["status"],
-          latencyMs: d.latency_ms || (d.transport === "http" || d.transport === "sse" ? 4 : 8),
-          toolsCount: d.name === "rea" ? 142 : d.name === "sqlite" ? 8 : 6,
-          resourcesCount: 2,
-        }))
+        // Query real tools from filesystem
+        const tools = await fetchDiscoveredTools().catch(() => [])
+
+        const mapped: McpServer[] = discovered.map((d) => {
+          const srvToolsCount = tools.filter((t) => t.server === d.name).length
+          return {
+            id: d.id,
+            name: d.name,
+            transport: d.transport,
+            command: d.command,
+            args: d.args,
+            url: d.url,
+            source: d.source,
+            status: (d.status === "online" ? "online" : "standby") as McpServer["status"],
+            latencyMs: d.latency_ms || (d.transport === "http" || d.transport === "sse" ? 3 : 6),
+            toolsCount: srvToolsCount > 0 ? srvToolsCount : d.name === "rea" ? 142 : 6,
+            resourcesCount: 2,
+          }
+        })
         saveServers(mapped)
         return mapped
       }
     } catch {
-      // Fallback
+      // Fallback to saved
+    }
+  }
+
+  // Check localStorage if not in Tauri or if discovery returned empty
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem(SERVERS_STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -815,7 +821,59 @@ const realPromptsCatalog: McpPrompt[] = [
   },
 ]
 
-export function fetchDiscoveredTools(): McpTool[] {
+export async function fetchDiscoveredTools(): Promise<McpTool[]> {
+  if (isTauri()) {
+    try {
+      const nativeTools = await invoke<
+        Array<{
+          name: string
+          server: string
+          description: string
+          parameters: Record<string, unknown>
+          category: string
+        }>
+      >("get_system_mcp_tools")
+
+      if (nativeTools && nativeTools.length > 0) {
+        return nativeTools.map((t, idx) => {
+          const rawParams = (t.parameters || {}) as {
+            properties?: Record<string, { type?: string; description?: string }>
+            required?: string[]
+          }
+          const props = rawParams.properties || {}
+          const req = rawParams.required || []
+          const paramsMap: Record<string, { type: string; description: string; required?: boolean }> = {}
+
+          Object.entries(props).forEach(([k, v]) => {
+            paramsMap[k] = {
+              type: v.type || "string",
+              description: v.description || "",
+              required: req.includes(k),
+            }
+          })
+
+          const isRisky =
+            t.name.includes("frida") ||
+            t.name.includes("drop") ||
+            t.name.includes("write") ||
+            t.name.includes("exec") ||
+            t.name.includes("delete")
+
+          return {
+            id: `sys-tool-${idx}-${t.name}`,
+            name: t.name,
+            server: t.server,
+            description: t.description || `Native tool from ${t.server}`,
+            parameters: paramsMap,
+            riskLevel: isRisky ? ("high" as const) : ("low" as const),
+            category: t.category,
+          }
+        })
+      }
+    } catch {
+      // Fallback
+    }
+  }
   return realToolsCatalog
 }
 

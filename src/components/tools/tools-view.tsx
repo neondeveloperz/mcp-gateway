@@ -61,7 +61,7 @@ export function ToolsView() {
   const [executionLatency, setExecutionLatency] = React.useState<number | null>(null)
 
   React.useEffect(() => {
-    setTools(fetchDiscoveredTools())
+    fetchDiscoveredTools().then(setTools)
     fetchDiscoveredServers().then(setServers)
   }, [])
 
@@ -168,7 +168,7 @@ export function ToolsView() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setTools(fetchDiscoveredTools())}
+            onClick={() => fetchDiscoveredTools().then(setTools)}
             className="size-8 p-0 cursor-pointer"
             title="Reload tools"
           >
@@ -444,3 +444,4 @@ export function ToolsView() {
     </div>
   )
 }
+

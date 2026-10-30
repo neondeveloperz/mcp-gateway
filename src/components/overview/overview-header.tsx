@@ -18,6 +18,21 @@ export function OverviewHeader({
   const [copied, setCopied] = React.useState(false)
   const [isRestarting, setIsRestarting] = React.useState(false)
 
+  const activeTokensCount = React.useMemo(() => {
+    if (typeof window === "undefined") return 1
+    try {
+      const saved = localStorage.getItem("mcp_gateway_tokens_v2")
+      if (saved) {
+        const tokens = JSON.parse(saved)
+        const active = tokens.filter((t: { status?: string }) => t.status === "active").length
+        return active > 0 ? active : 1
+      }
+    } catch {
+      // ignore
+    }
+    return 1
+  }, [])
+
   const endpointUrl = "http://127.0.0.1:8080/sse"
 
   const handleCopyEndpoint = async () => {
@@ -71,7 +86,7 @@ export function OverviewHeader({
             <span>•</span>
             <span className="font-mono text-foreground/80">{endpointUrl}</span>
             <span>•</span>
-            <span>4 Client Sessions Connected</span>
+            <span>{activeTokensCount} Authorized Client Session{activeTokensCount === 1 ? "" : "s"}</span>
           </div>
         </div>
       </div>

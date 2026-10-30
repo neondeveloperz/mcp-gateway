@@ -16,21 +16,7 @@ import {
 } from "@/components/ui/chart"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ActivityIcon, TrendingUpIcon } from "lucide-react"
-
-const throughputData = [
-  { time: "00:00", requests: 45, latency: 11 },
-  { time: "02:00", requests: 28, latency: 9 },
-  { time: "04:00", requests: 12, latency: 8 },
-  { time: "06:00", requests: 35, latency: 10 },
-  { time: "08:00", requests: 124, latency: 14 },
-  { time: "10:00", requests: 289, latency: 18 },
-  { time: "12:00", requests: 312, latency: 16 },
-  { time: "14:00", requests: 278, latency: 15 },
-  { time: "16:00", requests: 340, latency: 19 },
-  { time: "18:00", requests: 295, latency: 14 },
-  { time: "20:00", requests: 180, latency: 12 },
-  { time: "22:00", requests: 94, latency: 10 },
-]
+import { getRpcLogs, type RpcLog } from "@/lib/mcp-service"
 
 const chartConfig = {
   requests: {
@@ -45,6 +31,35 @@ const chartConfig = {
 
 export function OverviewChart() {
   const [metric, setMetric] = React.useState<"requests" | "latency">("requests")
+  const [chartData, setChartData] = React.useState<Array<{ time: string; requests: number; latency: number }>>([])
+  const [peakInfo, setPeakInfo] = React.useState<string>("Live stream active")
+
+  const refreshChart = React.useCallback(() => {
+    const logs: RpcLog[] = getRpcLogs()
+    if (logs.length === 0) {
+      const now = new Date().toLocaleTimeString("en-US", { hour12: false })
+      setChartData([{ time: now, requests: 0, latency: 0 }])
+      return
+    }
+
+    // Chronological order (oldest to newest)
+    const reversed = [...logs].reverse()
+    const points = reversed.map((l) => ({
+      time: l.time,
+      requests: 1,
+      latency: l.latencyMs,
+    }))
+
+    setChartData(points)
+    const maxLatency = Math.max(...points.map((p) => p.latency))
+    setPeakInfo(`Max latency: ${maxLatency}ms · Buffer: ${points.length} calls`)
+  }, [])
+
+  React.useEffect(() => {
+    refreshChart()
+    const interval = setInterval(refreshChart, 2500)
+    return () => clearInterval(interval)
+  }, [refreshChart])
 
   return (
     <Card className="flex flex-col">
@@ -81,7 +96,7 @@ export function OverviewChart() {
       </CardHeader>
       <CardContent className="pt-2">
         <ChartContainer config={chartConfig} className="aspect-auto h-[240px] w-full">
-          <AreaChart data={throughputData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="fillRequests" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.8} />
@@ -133,12 +148,12 @@ export function OverviewChart() {
 
         <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
-            <span className="flex size-2 rounded-full bg-emerald-500" />
-            <span>Peak throughput: 340 reqs/hr at 16:00</span>
+            <span className="flex size-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>{peakInfo}</span>
           </div>
           <div className="flex items-center gap-1 font-medium text-emerald-500">
             <TrendingUpIcon className="size-3.5" />
-            <span>99.94% Uptime</span>
+            <span>100% Operational</span>
           </div>
         </div>
       </CardContent>

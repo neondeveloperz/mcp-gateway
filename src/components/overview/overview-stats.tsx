@@ -50,6 +50,21 @@ export function OverviewStats({
       ? Math.round(logs.reduce((acc, l) => acc + l.latencyMs, 0) / logs.length)
       : 8
 
+  const activeTokensCount = React.useMemo(() => {
+    if (typeof window === "undefined") return 1
+    try {
+      const saved = localStorage.getItem("mcp_gateway_tokens_v2")
+      if (saved) {
+        const tokens = JSON.parse(saved)
+        const active = tokens.filter((t: { status?: string }) => t.status === "active").length
+        return active > 0 ? active : 1
+      }
+    } catch {
+      // ignore
+    }
+    return 1
+  }, [])
+
   const stats = [
     {
       title: "Connected Servers",
@@ -88,9 +103,9 @@ export function OverviewStats({
     },
     {
       title: "Client Sessions",
-      value: "4",
-      unit: "Clients",
-      description: "Cursor, Gemini, CLI & Web IDE",
+      value: activeTokensCount.toString(),
+      unit: "Tokens",
+      description: `${activeTokensCount} Authorized Bearer Token${activeTokensCount === 1 ? "" : "s"}`,
       badge: "TLS & Tokens",
       badgeVariant: "outline" as const,
       badgeColor: "border-emerald-500/30 text-emerald-500 bg-emerald-500/10",

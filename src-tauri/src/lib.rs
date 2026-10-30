@@ -42,6 +42,15 @@ pub struct PingResult {
     pub message: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct NativeMcpTool {
+    pub name: String,
+    pub server: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
+    pub category: String,
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -245,6 +254,77 @@ fn ping_mcp_server(target: &str, transport: &str) -> PingResult {
     }
 }
 
+#[tauri::command]
+fn get_system_mcp_tools() -> Vec<NativeMcpTool> {
+    let mut tools = Vec::new();
+    let Some(home) = home_dir() else {
+        return tools;
+    };
+
+    let mcp_dir = home.join(".gemini").join("antigravity").join("mcp");
+    if mcp_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&mcp_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let server_name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    if let Ok(tool_files) = fs::read_dir(&path) {
+                        for tool_file in tool_files.flatten() {
+                            let tool_path = tool_file.path();
+                            if tool_path.extension().and_then(|e| e.to_str()) == Some("json") {
+                                if let Ok(content) = fs::read_to_string(&tool_path) {
+                                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                                        let name = val
+                                            .get("name")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        if !name.is_empty() {
+                                            let description = val
+                                                .get("description")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("")
+                                                .to_string();
+                                            let parameters = val
+                                                .get("parameters")
+                                                .cloned()
+                                                .unwrap_or_else(|| serde_json::json!({}));
+                                            let category = if name.contains("inspect") || name.contains("analyze") {
+                                                "Analysis".to_string()
+                                            } else if name.contains("frida") || name.contains("debug") || name.contains("gdb") {
+                                                "Dynamic Hooks".to_string()
+                                            } else if name.contains("adb") || name.contains("android") {
+                                                "Mobile / ADB".to_string()
+                                            } else if name.contains("web") || name.contains("browser") {
+                                                "Web / Network".to_string()
+                                            } else {
+                                                "Reverse Engineering".to_string()
+                                            };
+                                            tools.push(NativeMcpTool {
+                                                name,
+                                                server: server_name.clone(),
+                                                description,
+                                                parameters,
+                                                category,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    tools.sort_by(|a, b| a.name.cmp(&b.name));
+    tools
+}
+
 fn external_navigation_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::<R>::new("external-navigation")
         .on_navigation(|webview, url| {
@@ -292,7 +372,8 @@ pub fn run() {
             greet,
             get_system_info,
             discover_mcp_servers,
-            ping_mcp_server
+            ping_mcp_server,
+            get_system_mcp_tools
         ])
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && matches!(payload.event(), PageLoadEvent::Finished) {
