@@ -12,6 +12,9 @@ export interface McpServer {
   latencyMs: number
   toolsCount: number
   resourcesCount: number
+  env?: Record<string, string>
+  headers?: Record<string, string>
+  authToken?: string
 }
 
 export interface SystemInfo {
@@ -730,6 +733,9 @@ export function addCustomServer(newServer: {
   command: string
   args: string[]
   url: string
+  env?: Record<string, string>
+  headers?: Record<string, string>
+  authToken?: string
 }): McpServer {
   const matchingTools = realToolsCatalog.filter((t) => t.server === newServer.name)
   const server: McpServer = {
@@ -744,6 +750,9 @@ export function addCustomServer(newServer: {
     latencyMs: 4,
     toolsCount: matchingTools.length > 0 ? matchingTools.length : 0,
     resourcesCount: 0,
+    env: newServer.env,
+    headers: newServer.headers,
+    authToken: newServer.authToken,
   }
   const current = typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
   const updated = [server, ...current]

@@ -42,6 +42,7 @@ import {
   GlobeIcon,
   CopyIcon,
   SlidersHorizontalIcon,
+  LockIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -67,6 +68,9 @@ export function ServersView() {
   const [newCommand, setNewCommand] = React.useState("")
   const [newArgs, setNewArgs] = React.useState("")
   const [newUrl, setNewUrl] = React.useState("")
+  const [newEnvText, setNewEnvText] = React.useState("")
+  const [newAuthToken, setNewAuthToken] = React.useState("")
+  const [newCustomHeaders, setNewCustomHeaders] = React.useState("")
 
   const loadServers = React.useCallback(async () => {
     const list = await fetchDiscoveredServers()
@@ -137,6 +141,46 @@ export function ServersView() {
     toast.success(`Server Removed`, { description: `${name} was deleted from configuration` })
   }
 
+  const parseEnv = (text: string): Record<string, string> => {
+    if (!text.trim()) return {}
+    try {
+      if (text.trim().startsWith("{")) {
+        return JSON.parse(text)
+      }
+    } catch {
+      // ignore
+    }
+    const envObj: Record<string, string> = {}
+    text.split("\n").forEach((line) => {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith("#")) return
+      const eqIdx = trimmed.indexOf("=")
+      if (eqIdx > 0) {
+        const k = trimmed.slice(0, eqIdx).trim()
+        const v = trimmed.slice(eqIdx + 1).trim()
+        envObj[k] = v
+      }
+    })
+    return envObj
+  }
+
+  const parseHeaders = (text: string, token: string): Record<string, string> => {
+    let headers: Record<string, string> = {}
+    if (text.trim()) {
+      try {
+        if (text.trim().startsWith("{")) {
+          headers = JSON.parse(text)
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (token.trim()) {
+      headers["Authorization"] = token.trim().startsWith("Bearer ") ? token.trim() : `Bearer ${token.trim()}`
+    }
+    return headers
+  }
+
   const handleCreateServer = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newName.trim()) {
@@ -144,12 +188,18 @@ export function ServersView() {
       return
     }
 
+    const parsedEnv = parseEnv(newEnvText)
+    const parsedHeaders = parseHeaders(newCustomHeaders, newAuthToken)
+
     const created = addCustomServer({
       name: newName.trim(),
       transport: newTransport,
       command: newCommand.trim(),
       args: newArgs.trim() ? newArgs.split(" ") : [],
       url: newUrl.trim(),
+      env: Object.keys(parsedEnv).length > 0 ? parsedEnv : undefined,
+      headers: Object.keys(parsedHeaders).length > 0 ? parsedHeaders : undefined,
+      authToken: newAuthToken.trim() || undefined,
     })
 
     setServers([created, ...servers])
@@ -158,6 +208,9 @@ export function ServersView() {
     setNewCommand("")
     setNewArgs("")
     setNewUrl("")
+    setNewEnvText("")
+    setNewAuthToken("")
+    setNewCustomHeaders("")
     toast.success("MCP Server Added", {
       description: `${created.name} (${created.transport.toUpperCase()}) registered successfully`,
     })
@@ -167,14 +220,26 @@ export function ServersView() {
     const configMap: Record<string, unknown> = {}
     servers.forEach((s) => {
       if (s.transport === "stdio") {
-        configMap[s.name] = {
+        const stdioCfg: Record<string, unknown> = {
           command: s.command,
           args: s.args,
         }
+        if (s.env && Object.keys(s.env).length > 0) {
+          stdioCfg.env = s.env
+        }
+        configMap[s.name] = stdioCfg
       } else {
-        configMap[s.name] = {
+        const remoteCfg: Record<string, unknown> = {
           url: s.url,
         }
+        if (s.headers && Object.keys(s.headers).length > 0) {
+          remoteCfg.headers = s.headers
+        } else if (s.authToken) {
+          remoteCfg.headers = {
+            Authorization: s.authToken.startsWith("Bearer ") ? s.authToken : `Bearer ${s.authToken}`,
+          }
+        }
+        configMap[s.name] = remoteCfg
       }
     })
 
@@ -408,11 +473,17 @@ export function ServersView() {
                     return (
                       <TableRow key={server.id} className="hover:bg-muted/30 transition-colors">
                         <TableCell className="font-semibold text-xs">
-                          <div className="flex flex-col">
-                            <span className="flex items-center gap-1.5 text-foreground">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 text-foreground">
                               <ServerIcon className="size-3.5 text-primary" />
-                              {server.name}
-                            </span>
+                              <span>{server.name}</span>
+                              {(server.authToken || (server.env && Object.keys(server.env).length > 0) || (server.headers && Object.keys(server.headers).length > 0)) && (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-emerald-500/30 text-emerald-400 gap-0.5 font-normal">
+                                  <LockIcon className="size-2.5" />
+                                  Auth
+                                </Badge>
+                              )}
+                            </div>
                             <span className="text-[10px] text-muted-foreground font-normal truncate max-w-44">
                               {server.source}
                             </span>
@@ -601,19 +672,66 @@ export function ServersView() {
                     />
                     <p className="text-[11px] text-muted-foreground">Command line parameters passed to process</p>
                   </div>
+
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                      <LockIcon className="size-3.5 text-primary" />
+                      Environment Variables & Tokens (Optional)
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder={"GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxxx\nAPI_KEY=sk_xxxx"}
+                      value={newEnvText}
+                      onChange={(e) => setNewEnvText(e.target.value)}
+                      className="font-mono text-xs w-full rounded-md border border-input bg-background p-2.5 outline-none resize-none placeholder:text-muted-foreground/60"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Injected securely into the child process environment. Format: KEY=VALUE per line or JSON.
+                    </p>
+                  </div>
                 </>
               ) : (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-foreground">Endpoint URL</label>
-                  <Input
-                    placeholder="e.g. http://127.0.0.1:3000/sse"
-                    value={newUrl}
-                    onChange={(e) => setNewUrl(e.target.value)}
-                    className="text-xs font-mono"
-                    required
-                  />
-                  <p className="text-[11px] text-muted-foreground">Full HTTP or SSE endpoint address</p>
-                </div>
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-foreground">Endpoint URL</label>
+                    <Input
+                      placeholder="e.g. http://127.0.0.1:3000/sse"
+                      value={newUrl}
+                      onChange={(e) => setNewUrl(e.target.value)}
+                      className="text-xs font-mono"
+                      required
+                    />
+                    <p className="text-[11px] text-muted-foreground">Full HTTP or SSE endpoint address</p>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                      <LockIcon className="size-3.5 text-primary" />
+                      Authentication Bearer Token / API Key (Optional)
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="e.g. ghp_... or mcp_remote_key_..."
+                      value={newAuthToken}
+                      onChange={(e) => setNewAuthToken(e.target.value)}
+                      className="text-xs font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Sent automatically in the &apos;Authorization: Bearer &lt;token&gt;&apos; header to the remote MCP server.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-foreground">Custom HTTP Headers (Optional JSON)</label>
+                    <Input
+                      placeholder='e.g. {"x-api-key": "secret123"}'
+                      value={newCustomHeaders}
+                      onChange={(e) => setNewCustomHeaders(e.target.value)}
+                      className="text-xs font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">Additional headers needed by specific remote MCP endpoints.</p>
+                  </div>
+                </>
               )}
             </div>
 
