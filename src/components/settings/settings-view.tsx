@@ -33,7 +33,6 @@ import {
   LockIcon,
 } from "lucide-react"
 import { toast } from "sonner"
-import { TokenManager } from "@/components/tokens/token-manager"
 import { fetchSystemInfo, type SystemInfo } from "@/lib/mcp-service"
 
 export interface GatewayConfig {
@@ -96,7 +95,7 @@ const defaultConfig: GatewayConfig = {
 
 const STORAGE_KEY = "mcp_gateway_config_v1"
 
-export function SettingsView() {
+export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const [config, setConfig] = React.useState<GatewayConfig>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -510,8 +509,28 @@ export function SettingsView() {
             </CardContent>
           </Card>
 
-          {/* Token Generation & Management */}
-          <TokenManager />
+          {/* Reference to separate API Keys & Tokens view */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-border/70 bg-card/60 p-4 shadow-2xs">
+            <div className="space-y-0.5">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <ShieldCheckIcon className="size-3.5 text-emerald-500" />
+                API Keys & Client Authentication Tokens
+              </span>
+              <p className="text-[11px] text-muted-foreground">
+                Cryptographic bearer tokens, scopes, and expiration dates are managed in the dedicated API Keys & Tokens view.
+              </p>
+            </div>
+            {onNavigate && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onNavigate("keys")}
+                className="h-8 text-xs cursor-pointer shrink-0"
+              >
+                Go to API Keys & Tokens
+              </Button>
+            )}
+          </div>
         </TabsContent>
 
         {/* 3. Execution & Limits */}

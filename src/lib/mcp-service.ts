@@ -341,3 +341,4 @@ export function logRpcCall(entry: Omit<RpcLog, "id" | "time">) {
   const updated = [newLog, ...current].slice(0, 50)
   saveRpcLogs(updated)
 }
+

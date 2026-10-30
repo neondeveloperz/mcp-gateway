@@ -48,7 +48,7 @@ export default function App() {
           <SiteHeader title={tabTitles[activeTab] ?? "Overview"} />
           <main className="flex-1 overflow-y-auto">
             {activeTab === "settings" ? (
-              <SettingsView />
+              <SettingsView onNavigate={setActiveTab} />
             ) : activeTab === "keys" ? (
               <ApiKeysView />
             ) : (
