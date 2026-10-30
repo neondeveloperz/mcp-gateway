@@ -6,7 +6,6 @@ import {
   CardDescription,
   CardContent,
   CardFooter,
-  CardAction,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -48,6 +47,7 @@ import {
   SlidersIcon,
   WrenchIcon,
   NetworkIcon,
+  SearchIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { fetchDiscoveredServers, fetchDiscoveredTools, type McpServer } from "@/lib/mcp-service"
@@ -130,6 +130,7 @@ export function SecurityView() {
   const [newAllowedPath, setNewAllowedPath] = React.useState("")
   const [newBlockedPath, setNewBlockedPath] = React.useState("")
   const [selectedServerFilter, setSelectedServerFilter] = React.useState<string>("all")
+  const [ruleSearch, setRuleSearch] = React.useState<string>("")
 
   React.useEffect(() => {
     fetchDiscoveredServers().then(setServers)
@@ -286,11 +287,18 @@ export function SecurityView() {
   }
 
   const activeServerNames = new Set(servers.map((s) => s.name))
-  const filteredRules = rules.filter(
-    (r) =>
+  const filteredRules = rules.filter((r) => {
+    const matchServer =
       (selectedServerFilter === "all" || r.serverName === selectedServerFilter) &&
       (servers.length === 0 || activeServerNames.has(r.serverName))
-  )
+    const searchLower = ruleSearch.trim().toLowerCase()
+    const matchSearch =
+      searchLower === "" ||
+      r.toolPattern.toLowerCase().includes(searchLower) ||
+      r.description.toLowerCase().includes(searchLower) ||
+      r.serverName.toLowerCase().includes(searchLower)
+    return matchServer && matchSearch
+  })
 
   const getRiskBadge = (risk: ToolRule["riskLevel"]) => {
     switch (risk) {
@@ -453,17 +461,26 @@ export function SecurityView() {
         {/* 1. Tool Permissions (RBAC) */}
         <TabsContent value="tools" className="space-y-4">
           <Card>
-            <CardHeader className="flex flex-col gap-3 pb-3 md:flex-row md:items-center md:justify-between">
-              <div>
+            <CardHeader className="flex flex-col gap-3 pb-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1 min-w-0 flex-1">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <WrenchIcon className="size-4 text-primary" />
-                  Tool Execution Authorization Matrix
+                  <WrenchIcon className="size-4 text-primary shrink-0" />
+                  <span>Tool Execution Authorization Matrix</span>
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-xs truncate">
                   Define whether LLMs can automatically execute tools, require explicit human confirmation, or are denied completely
                 </CardDescription>
               </div>
-              <CardAction className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="relative">
+                  <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Filter tools..."
+                    value={ruleSearch}
+                    onChange={(e) => setRuleSearch(e.target.value)}
+                    className="h-8 pl-8 pr-2.5 text-xs w-36 sm:w-44"
+                  />
+                </div>
                 <select
                   value={selectedServerFilter}
                   onChange={(e) => setSelectedServerFilter(e.target.value)}
@@ -494,81 +511,103 @@ export function SecurityView() {
                   <PlusIcon className="size-3.5" />
                   <span>Add Rule</span>
                 </Button>
-              </CardAction>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-t hover:bg-transparent">
-                      <TableHead className="w-32 text-xs font-semibold">Server</TableHead>
-                      <TableHead className="w-48 text-xs font-semibold">Tool Pattern</TableHead>
-                      <TableHead className="text-xs font-semibold">Description</TableHead>
-                      <TableHead className="w-24 text-xs font-semibold">Risk Level</TableHead>
-                      <TableHead className="w-56 text-right text-xs font-semibold">Authorization Policy</TableHead>
-                      <TableHead className="w-12 text-center text-xs font-semibold">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRules.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="py-16 text-center text-xs text-muted-foreground">
-                          <div className="flex flex-col items-center justify-center gap-2.5">
-                            <WrenchIcon className="size-8 text-muted-foreground/60" />
-                            <span className="font-semibold text-foreground text-sm">No Tool Authorization Rules Configured</span>
-                            <p className="text-xs text-muted-foreground max-w-sm">
-                              {servers.length === 0
-                                ? "Add an MCP server in 'MCP Servers' to sync tools, or define custom pattern rules."
-                                : "You have connected servers! Click below to sync real tools into this matrix or add custom rules."}
-                            </p>
-                            <div className="flex items-center gap-2 pt-1">
-                              {servers.length > 0 && (
-                                <Button
-                                  size="sm"
-                                  onClick={handleSyncToolsFromServers}
-                                  disabled={isSyncing}
-                                  className="gap-1.5 text-xs h-8 cursor-pointer"
-                                >
-                                  <RotateCwIcon className={`size-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-                                  <span>Sync Tools from Servers</span>
-                                </Button>
-                              )}
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-t hover:bg-transparent">
+                    <TableHead className="w-[110px] text-xs font-semibold">Server</TableHead>
+                    <TableHead className="w-[180px] text-xs font-semibold">Tool Pattern</TableHead>
+                    <TableHead className="text-xs font-semibold">Description</TableHead>
+                    <TableHead className="w-[90px] text-xs font-semibold">Risk Level</TableHead>
+                    <TableHead className="w-[190px] text-right text-xs font-semibold">Authorization Policy</TableHead>
+                    <TableHead className="w-[50px] text-center text-xs font-semibold">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rules.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-16 text-center text-xs text-muted-foreground">
+                        <div className="flex flex-col items-center justify-center gap-2.5">
+                          <WrenchIcon className="size-8 text-muted-foreground/60" />
+                          <span className="font-semibold text-foreground text-sm">No Tool Authorization Rules Configured</span>
+                          <p className="text-xs text-muted-foreground max-w-sm">
+                            {servers.length === 0
+                              ? "Add an MCP server in 'MCP Servers' to sync tools, or define custom pattern rules."
+                              : "You have connected servers! Click below to sync real tools into this matrix or add custom rules."}
+                          </p>
+                          <div className="flex items-center gap-2 pt-1">
+                            {servers.length > 0 && (
                               <Button
                                 size="sm"
-                                variant="outline"
-                                onClick={() => setIsAddRuleOpen(true)}
+                                onClick={handleSyncToolsFromServers}
+                                disabled={isSyncing}
                                 className="gap-1.5 text-xs h-8 cursor-pointer"
                               >
-                                <PlusIcon className="size-3.5" />
-                                <span>Add Custom Rule</span>
+                                <RotateCwIcon className={`size-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                                <span>Sync Tools from Servers</span>
                               </Button>
-                            </div>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setIsAddRuleOpen(true)}
+                              className="gap-1.5 text-xs h-8 cursor-pointer"
+                            >
+                              <PlusIcon className="size-3.5" />
+                              <span>Add Custom Rule</span>
+                            </Button>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredRules.map((rule) => {
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredRules.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-12 text-center text-xs text-muted-foreground">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <SearchIcon className="size-6 text-muted-foreground/50" />
+                          <span className="font-medium text-foreground">No matching rules found</span>
+                          <p className="text-xs text-muted-foreground">
+                            Try adjusting your search filter or server selection.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setRuleSearch("")
+                              setSelectedServerFilter("all")
+                            }}
+                            className="mt-1 h-7 text-xs"
+                          >
+                            Clear Filters
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredRules.map((rule) => {
                       const riskBadge = getRiskBadge(rule.riskLevel)
                       return (
                         <TableRow key={rule.id} className="hover:bg-muted/30 transition-colors">
-                          <TableCell className="font-semibold text-xs">
-                            <span className="flex items-center gap-1.5">
-                              <ServerIcon className="size-3.5 text-primary" />
-                              {rule.serverName}
+                          <TableCell className="w-[110px] max-w-[110px] font-semibold text-xs shrink-0">
+                            <span className="flex items-center gap-1.5 truncate" title={rule.serverName}>
+                              <ServerIcon className="size-3.5 text-primary shrink-0" />
+                              <span className="truncate">{rule.serverName}</span>
                             </span>
                           </TableCell>
-                          <TableCell className="font-mono text-xs text-foreground font-medium">
-                            {rule.toolPattern}
+                          <TableCell className="w-[180px] max-w-[180px] font-mono text-xs text-foreground font-medium truncate" title={rule.toolPattern}>
+                            <span className="truncate block">{rule.toolPattern}</span>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {rule.description}
+                          <TableCell className="max-w-xs md:max-w-md lg:max-w-lg text-xs text-muted-foreground truncate" title={rule.description}>
+                            <span className="truncate block">{rule.description}</span>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="w-[90px] shrink-0 whitespace-nowrap">
                             <Badge variant="outline" className={`text-[10px] font-semibold uppercase ${riskBadge}`}>
                               {rule.riskLevel}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="w-[190px] shrink-0 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">
                               <Button
                                 size="sm"
@@ -596,29 +635,30 @@ export function SecurityView() {
                               </Button>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="w-[50px] shrink-0 text-center">
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => handleDeleteRule(rule.id)}
                               className="size-7 text-muted-foreground hover:text-destructive cursor-pointer"
+                              title="Delete rule"
                             >
                               <Trash2Icon className="size-3.5" />
                             </Button>
                           </TableCell>
                         </TableRow>
                       )
-                    }))}
-                  </TableBody>
-                </Table>
-              </div>
+                    })
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
             <CardFooter className="flex flex-wrap items-center justify-between border-t border-border/40 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <CheckCircle2Icon className="size-3.5 text-emerald-500" />
                 Destructive commands (DROP, ATTACH, raw exec) blocked by default
               </span>
-              <span>Total Rules: {rules.length}</span>
+              <span>Showing {filteredRules.length} of {rules.length} Rules</span>
             </CardFooter>
           </Card>
         </TabsContent>
