@@ -27,6 +27,13 @@ import {
   TabsContent,
 } from "@/components/ui/tabs"
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet"
+import {
   ShieldCheckIcon,
   ShieldAlertIcon,
   LockIcon,
@@ -43,7 +50,7 @@ import {
   NetworkIcon,
 } from "lucide-react"
 import { toast } from "sonner"
-import { fetchDiscoveredServers, type McpServer } from "@/lib/mcp-service"
+import { fetchDiscoveredServers, fetchDiscoveredTools, type McpServer } from "@/lib/mcp-service"
 
 export type ToolPermissionLevel = "auto-allow" | "prompt-confirm" | "block"
 
@@ -179,6 +186,90 @@ export function SecurityView() {
     const next = { ...policies, blockedPaths: policies.blockedPaths.filter((p) => p !== path) }
     saveAll(next, rules)
     toast.info("Removed Blocked Path")
+  }
+
+  // Tool Rule Management State
+  const [isAddRuleOpen, setIsAddRuleOpen] = React.useState(false)
+  const [newRuleServer, setNewRuleServer] = React.useState("")
+  const [newRulePattern, setNewRulePattern] = React.useState("")
+  const [newRuleDescription, setNewRuleDescription] = React.useState("")
+  const [newRuleRisk, setNewRuleRisk] = React.useState<"low" | "medium" | "high" | "critical">("low")
+  const [newRulePermission, setNewRulePermission] = React.useState<ToolPermissionLevel>("auto-allow")
+  const [isSyncing, setIsSyncing] = React.useState(false)
+
+  const handleSyncToolsFromServers = async () => {
+    setIsSyncing(true)
+    try {
+      const discoveredTools = await fetchDiscoveredTools()
+      if (discoveredTools.length === 0) {
+        toast.error("No registered tools found", {
+          description: "Please add an MCP server in 'MCP Servers' first.",
+        })
+        return
+      }
+
+      const existingKeys = new Set(rules.map((r) => `${r.serverName}::${r.toolPattern}`))
+      const newRules: ToolRule[] = []
+
+      discoveredTools.forEach((tool) => {
+        const key = `${tool.server}::${tool.name}`
+        if (!existingKeys.has(key)) {
+          const risk = tool.riskLevel || "low"
+          const perm: ToolPermissionLevel =
+            risk === "critical" ? "block" : risk === "high" ? "prompt-confirm" : "auto-allow"
+
+          newRules.push({
+            id: `rule-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            serverName: tool.server,
+            toolPattern: tool.name,
+            description: tool.description || `Execution authorization for ${tool.name}`,
+            permission: perm,
+            riskLevel: risk,
+          })
+        }
+      })
+
+      if (newRules.length === 0) {
+        toast.info("Rules Already Synchronized", {
+          description: "All tools from active MCP servers already have authorization rules configured.",
+        })
+      } else {
+        const updated = [...rules, ...newRules]
+        saveAll(policies, updated)
+        toast.success(`Synced ${newRules.length} tool authorization rules!`)
+      }
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const handleDeleteRule = (ruleId: string) => {
+    const nextRules = rules.filter((r) => r.id !== ruleId)
+    saveAll(policies, nextRules)
+    toast.info("Rule Removed")
+  }
+
+  const handleCreateRule = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newRulePattern.trim()) {
+      toast.error("Tool pattern is required")
+      return
+    }
+    const server = newRuleServer.trim() || (servers[0]?.name ?? "default")
+    const newRule: ToolRule = {
+      id: `rule-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      serverName: server,
+      toolPattern: newRulePattern.trim(),
+      description: newRuleDescription.trim() || `Custom pattern rule for ${server}`,
+      permission: newRulePermission,
+      riskLevel: newRuleRisk,
+    }
+    const updated = [newRule, ...rules]
+    saveAll(policies, updated)
+    setIsAddRuleOpen(false)
+    setNewRulePattern("")
+    setNewRuleDescription("")
+    toast.success("Added Custom Tool Rule")
   }
 
   const handleRunSecurityAudit = () => {
@@ -385,6 +476,24 @@ export function SecurityView() {
                     </option>
                   ))}
                 </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSyncToolsFromServers}
+                  disabled={isSyncing}
+                  className="h-8 text-xs cursor-pointer gap-1.5"
+                >
+                  <RotateCwIcon className={`size-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                  <span>Sync Tools</span>
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setIsAddRuleOpen(true)}
+                  className="h-8 text-xs cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium"
+                >
+                  <PlusIcon className="size-3.5" />
+                  <span>Add Rule</span>
+                </Button>
               </CardAction>
             </CardHeader>
             <CardContent className="p-0">
@@ -397,13 +506,44 @@ export function SecurityView() {
                       <TableHead className="text-xs font-semibold">Description</TableHead>
                       <TableHead className="w-24 text-xs font-semibold">Risk Level</TableHead>
                       <TableHead className="w-56 text-right text-xs font-semibold">Authorization Policy</TableHead>
+                      <TableHead className="w-12 text-center text-xs font-semibold">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredRules.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-12 text-center text-xs text-muted-foreground">
-                          No tool authorization rules active. Add an MCP server to configure execution policies.
+                        <TableCell colSpan={6} className="py-16 text-center text-xs text-muted-foreground">
+                          <div className="flex flex-col items-center justify-center gap-2.5">
+                            <WrenchIcon className="size-8 text-muted-foreground/60" />
+                            <span className="font-semibold text-foreground text-sm">No Tool Authorization Rules Configured</span>
+                            <p className="text-xs text-muted-foreground max-w-sm">
+                              {servers.length === 0
+                                ? "Add an MCP server in 'MCP Servers' to sync tools, or define custom pattern rules."
+                                : "You have connected servers! Click below to sync real tools into this matrix or add custom rules."}
+                            </p>
+                            <div className="flex items-center gap-2 pt-1">
+                              {servers.length > 0 && (
+                                <Button
+                                  size="sm"
+                                  onClick={handleSyncToolsFromServers}
+                                  disabled={isSyncing}
+                                  className="gap-1.5 text-xs h-8 cursor-pointer"
+                                >
+                                  <RotateCwIcon className={`size-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                                  <span>Sync Tools from Servers</span>
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setIsAddRuleOpen(true)}
+                                className="gap-1.5 text-xs h-8 cursor-pointer"
+                              >
+                                <PlusIcon className="size-3.5" />
+                                <span>Add Custom Rule</span>
+                              </Button>
+                            </div>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -455,6 +595,16 @@ export function SecurityView() {
                                 Block
                               </Button>
                             </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteRule(rule.id)}
+                              className="size-7 text-muted-foreground hover:text-destructive cursor-pointer"
+                            >
+                              <Trash2Icon className="size-3.5" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       )
@@ -720,6 +870,116 @@ export function SecurityView() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add Custom Rule Sheet */}
+      <Sheet open={isAddRuleOpen} onOpenChange={setIsAddRuleOpen}>
+        <SheetContent className="sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-base flex items-center gap-2">
+              <WrenchIcon className="size-4 text-primary" />
+              Add Tool Authorization Rule
+            </SheetTitle>
+            <SheetDescription className="text-xs">
+              Define execution permissions for a specific MCP tool or wildcard pattern (e.g. read_*, execute_query).
+            </SheetDescription>
+          </SheetHeader>
+          <form onSubmit={handleCreateRule} className="space-y-4 pt-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">Target Server</label>
+              {servers.length > 0 ? (
+                <select
+                  value={newRuleServer}
+                  onChange={(e) => setNewRuleServer(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs outline-none"
+                >
+                  <option value="">Select server...</option>
+                  {servers.map((s) => (
+                    <option key={s.name} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                  <option value="*">* (All Servers)</option>
+                </select>
+              ) : (
+                <Input
+                  placeholder="Server name (e.g. sqlite, github, *)"
+                  value={newRuleServer}
+                  onChange={(e) => setNewRuleServer(e.target.value)}
+                  className="text-xs font-mono"
+                />
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">Tool Name or Pattern</label>
+              <Input
+                required
+                placeholder="e.g. read_* or list_directory or *"
+                value={newRulePattern}
+                onChange={(e) => setNewRulePattern(e.target.value)}
+                className="text-xs font-mono"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Supports exact tool name or wildcard pattern matching.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">Description</label>
+              <Input
+                placeholder="Purpose or reason for this rule"
+                value={newRuleDescription}
+                onChange={(e) => setNewRuleDescription(e.target.value)}
+                className="text-xs"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Risk Classification</label>
+                <select
+                  value={newRuleRisk}
+                  onChange={(e) => setNewRuleRisk(e.target.value as "low" | "medium" | "high" | "critical")}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs outline-none"
+                >
+                  <option value="low">Low (Read-only)</option>
+                  <option value="medium">Medium (Stateful)</option>
+                  <option value="high">High (External effect)</option>
+                  <option value="critical">Critical (Destructive)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Initial Policy</label>
+                <select
+                  value={newRulePermission}
+                  onChange={(e) => setNewRulePermission(e.target.value as ToolPermissionLevel)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs outline-none"
+                >
+                  <option value="auto-allow">Auto-Allow</option>
+                  <option value="prompt-confirm">Prompt Confirmation</option>
+                  <option value="block">Block Execution</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-4 flex items-center justify-end gap-2 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddRuleOpen(false)}
+                className="cursor-pointer text-xs"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" className="cursor-pointer text-xs bg-primary text-primary-foreground">
+                Create Rule
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
