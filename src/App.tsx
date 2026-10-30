@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header"
 import { OverviewView } from "@/components/overview/overview-view"
 import { SettingsView } from "@/components/settings/settings-view"
 import { ApiKeysView } from "@/components/tokens/api-keys-view"
+import { SecurityView } from "@/components/security/security-view"
 import {
   SidebarInset,
   SidebarProvider,
@@ -51,6 +52,8 @@ export default function App() {
               <SettingsView onNavigate={setActiveTab} />
             ) : activeTab === "keys" ? (
               <ApiKeysView />
+            ) : activeTab === "security" ? (
+              <SecurityView />
             ) : (
               <OverviewView
                 onNavigate={setActiveTab}
