@@ -609,30 +609,65 @@ const realPromptsCatalog: McpPrompt[] = [
   },
 ]
 
+interface McpToolsListResponse {
+  result?: {
+    tools?: Array<{
+      name: string
+      description?: string
+      title?: string
+      inputSchema?: {
+        properties?: Record<string, { type?: string; description?: string }>
+        required?: string[]
+      }
+      annotations?: { destructiveHint?: boolean; readOnlyHint?: boolean }
+    }>
+  }
+}
+
 async function fetchRemoteTools(server: McpServer): Promise<McpTool[]> {
   if (!server.url) return []
   try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(server.headers || {}),
-    }
-    if (server.authToken && !headers["Authorization"]) {
-      headers["Authorization"] = server.authToken.startsWith("Bearer ")
-        ? server.authToken
-        : `Bearer ${server.authToken}`
-    }
-    const res = await fetch(server.url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: `tools-${Date.now()}`,
-        method: "tools/list",
-        params: {},
-      }),
+    const payload = JSON.stringify({
+      jsonrpc: "2.0",
+      id: `tools-${Date.now()}`,
+      method: "tools/list",
+      params: {},
     })
-    if (!res.ok) return []
-    const json = await res.json()
+
+    let json: McpToolsListResponse | null = null
+
+    if (isTauri()) {
+      try {
+        const raw = await invoke<string>("execute_remote_mcp", {
+          url: server.url,
+          authToken: server.authToken || null,
+          payload,
+        })
+        json = JSON.parse(raw)
+      } catch (tauriErr) {
+        console.warn("Tauri invoke execute_remote_mcp failed, falling back to fetch:", tauriErr)
+      }
+    }
+
+    if (!json) {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(server.headers || {}),
+      }
+      if (server.authToken && !headers["Authorization"]) {
+        headers["Authorization"] = server.authToken.startsWith("Bearer ")
+          ? server.authToken
+          : `Bearer ${server.authToken}`
+      }
+      const res = await fetch(server.url, {
+        method: "POST",
+        headers,
+        body: payload,
+      })
+      if (!res.ok) return []
+      json = await res.json()
+    }
+
     if (json?.result?.tools && Array.isArray(json.result.tools)) {
       return json.result.tools.map((t: { name: string; description?: string; title?: string; inputSchema?: { properties?: Record<string, { type?: string; description?: string }>; required?: string[] }; annotations?: { destructiveHint?: boolean; readOnlyHint?: boolean } }, idx: number) => ({
         id: `tool-${server.name}-${idx + 1}`,
@@ -730,44 +765,65 @@ export async function executeMcpTool(
   let isSuccess = true
 
   if (server?.url) {
-    try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        ...(server.headers || {}),
-      }
-      if (server.authToken && !headers["Authorization"]) {
-        headers["Authorization"] = server.authToken.startsWith("Bearer ")
-          ? server.authToken
-          : `Bearer ${server.authToken}`
-      }
+    const payload = JSON.stringify({
+      jsonrpc: "2.0",
+      id: `call-${Date.now()}`,
+      method: "tools/call",
+      params: {
+        name: toolName,
+        arguments: args,
+      },
+    })
 
-      const res = await fetch(server.url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: `call-${Date.now()}`,
-          method: "tools/call",
-          params: {
-            name: toolName,
-            arguments: args,
-          },
-        }),
-      })
+    let json: { result?: unknown; error?: unknown } | null = null
 
-      const json = await res.json()
-      if (json?.error) {
+    if (isTauri()) {
+      try {
+        const raw = await invoke<string>("execute_remote_mcp", {
+          url: server.url,
+          authToken: server.authToken || null,
+          payload,
+        })
+        json = JSON.parse(raw)
+      } catch (err) {
+        console.warn("Tauri invoke execute_remote_mcp failed, falling back to fetch:", err)
+      }
+    }
+
+    if (!json) {
+      try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          ...(server.headers || {}),
+        }
+        if (server.authToken && !headers["Authorization"]) {
+          headers["Authorization"] = server.authToken.startsWith("Bearer ")
+            ? server.authToken
+            : `Bearer ${server.authToken}`
+        }
+
+        const res = await fetch(server.url, {
+          method: "POST",
+          headers,
+          body: payload,
+        })
+        json = await res.json()
+      } catch (err: unknown) {
+        isSuccess = false
+        const msg = err instanceof Error ? err.message : String(err)
+        resultData = { error: msg }
+      }
+    }
+
+    if (json) {
+      if (json.error) {
         isSuccess = false
         resultData = json.error
-      } else if (json?.result) {
+      } else if (json.result) {
         resultData = json.result
       } else {
         resultData = json
       }
-    } catch (err: unknown) {
-      isSuccess = false
-      const msg = err instanceof Error ? err.message : String(err)
-      resultData = { error: msg }
     }
   } else {
     await new Promise((resolve) => setTimeout(resolve, 80 + Math.random() * 60))

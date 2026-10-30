@@ -42,6 +42,7 @@ import { toast } from "sonner"
 import {
   fetchDiscoveredTools,
   fetchDiscoveredServers,
+  subscribeToServers,
   executeMcpTool,
   type McpTool,
   type McpServer,
@@ -59,11 +60,27 @@ export function ToolsView() {
   const [executionResult, setExecutionResult] = React.useState<unknown | null>(null)
   const [isRunning, setIsRunning] = React.useState(false)
   const [executionLatency, setExecutionLatency] = React.useState<number | null>(null)
+  const [isLoading, setIsLoading] = React.useState(false)
+
+  const reloadTools = React.useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const discoveredTools = await fetchDiscoveredTools()
+      setTools(discoveredTools)
+      const list = await fetchDiscoveredServers()
+      setServers(list)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   React.useEffect(() => {
-    fetchDiscoveredTools().then(setTools)
-    fetchDiscoveredServers().then(setServers)
-  }, [])
+    reloadTools()
+    const unsubscribe = subscribeToServers(() => {
+      reloadTools()
+    })
+    return unsubscribe
+  }, [reloadTools])
 
   const categories = Array.from(new Set(tools.map((t) => t.category)))
 
@@ -169,11 +186,13 @@ export function ToolsView() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchDiscoveredTools().then(setTools)}
-            className="size-8 p-0 cursor-pointer"
+            onClick={reloadTools}
+            disabled={isLoading}
+            className="cursor-pointer gap-1.5 text-xs h-8"
             title="Reload tools"
           >
-            <RotateCwIcon className="size-3.5" />
+            <RotateCwIcon className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <span>{isLoading ? "Fetching Tools..." : "Refresh Tools"}</span>
           </Button>
         </div>
       </div>
@@ -248,12 +267,25 @@ export function ToolsView() {
                 {filteredTools.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="py-16 text-center text-xs text-muted-foreground">
-                      <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="flex flex-col items-center justify-center gap-2.5">
                         <WrenchIcon className="size-8 text-muted-foreground/60" />
                         <span className="font-semibold text-foreground text-sm">No Tools Available</span>
                         <p className="text-xs text-muted-foreground max-w-sm">
-                          Tools will appear here once you add and connect MCP servers in &quot;MCP Servers&quot;.
+                          {servers.length === 0
+                            ? "Tools will appear here once you add and connect MCP servers in 'MCP Servers'."
+                            : `You have ${servers.length} connected server(s). Click below to fetch and synchronize their tools.`}
                         </p>
+                        {servers.length > 0 && (
+                          <Button
+                            size="sm"
+                            onClick={reloadTools}
+                            disabled={isLoading}
+                            className="gap-1.5 text-xs h-8 cursor-pointer mt-1 bg-primary text-primary-foreground font-medium"
+                          >
+                            <RotateCwIcon className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} />
+                            <span>{isLoading ? "Fetching Tools..." : "Fetch Server Tools"}</span>
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

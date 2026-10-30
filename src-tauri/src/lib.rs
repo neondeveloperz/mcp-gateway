@@ -325,6 +325,40 @@ fn get_system_mcp_tools() -> Vec<NativeMcpTool> {
     tools
 }
 
+#[tauri::command]
+fn execute_remote_mcp(url: String, auth_token: Option<String>, payload: String) -> Result<String, String> {
+    let mut cmd = Command::new("curl");
+    cmd.arg("-s")
+        .arg("-m")
+        .arg("12")
+        .arg("-X")
+        .arg("POST")
+        .arg("-H")
+        .arg("Content-Type: application/json");
+
+    if let Some(token) = auth_token {
+        if !token.is_empty() {
+            let auth_header = if token.starts_with("Bearer ") {
+                token
+            } else {
+                format!("Bearer {}", token)
+            };
+            cmd.arg("-H").arg(format!("Authorization: {}", auth_header));
+        }
+    }
+
+    cmd.arg("-d").arg(&payload);
+    cmd.arg(&url);
+
+    let output = cmd.output().map_err(|e| format!("Failed to spawn curl: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("curl failed with status code: {:?}", output.status.code()));
+    }
+
+    let response_text = String::from_utf8_lossy(&output.stdout).to_string();
+    Ok(response_text)
+}
+
 fn external_navigation_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::<R>::new("external-navigation")
         .on_navigation(|webview, url| {
@@ -373,7 +407,8 @@ pub fn run() {
             get_system_info,
             discover_mcp_servers,
             ping_mcp_server,
-            get_system_mcp_tools
+            get_system_mcp_tools,
+            execute_remote_mcp
         ])
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && matches!(payload.event(), PageLoadEvent::Finished) {
