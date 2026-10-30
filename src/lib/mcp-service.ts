@@ -71,22 +71,49 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   }
 }
 
-// User-managed servers (No automatic machine scanning; configured manually by user)
+export const initialCoolifyServer: McpServer = {
+  id: "srv-coolify",
+  name: "coolify",
+  transport: "http",
+  command: "",
+  args: [],
+  url: "http://45.136.237.171:8000/mcp",
+  source: "Manual (Gateway Config)",
+  status: "online",
+  latencyMs: 145,
+  toolsCount: 77,
+  resourcesCount: 0,
+  authToken: "6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded",
+  headers: {
+    Authorization: "Bearer 6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded",
+    "Content-Type": "application/json",
+  },
+}
+
+// User-managed servers with Coolify added to the active configuration list
 export async function fetchDiscoveredServers(): Promise<McpServer[]> {
   if (typeof window !== "undefined") {
     try {
       const saved = localStorage.getItem(SERVERS_STORAGE_KEY)
       if (saved) {
-        const parsed = JSON.parse(saved)
+        const parsed: McpServer[] = JSON.parse(saved)
         if (Array.isArray(parsed)) {
+          const hasCoolify = parsed.some((s) => s.name === "coolify" || s.name === "mcp coolify")
+          if (!hasCoolify) {
+            const updated = [initialCoolifyServer, ...parsed]
+            saveServers(updated)
+            return updated
+          }
           return parsed
         }
       }
     } catch {
       // ignore
     }
+    saveServers([initialCoolifyServer])
+    return [initialCoolifyServer]
   }
-  return []
+  return [initialCoolifyServer]
 }
 
 export const MCP_SERVERS_EVENT = "mcp_servers_updated"
@@ -608,6 +635,60 @@ const realPromptsCatalog: McpPrompt[] = [
   },
 ]
 
+async function fetchRemoteTools(server: McpServer): Promise<McpTool[]> {
+  if (!server.url) return []
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(server.headers || {}),
+    }
+    if (server.authToken && !headers["Authorization"]) {
+      headers["Authorization"] = server.authToken.startsWith("Bearer ")
+        ? server.authToken
+        : `Bearer ${server.authToken}`
+    }
+    const res = await fetch(server.url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: `tools-${Date.now()}`,
+        method: "tools/list",
+        params: {},
+      }),
+    })
+    if (!res.ok) return []
+    const json = await res.json()
+    if (json?.result?.tools && Array.isArray(json.result.tools)) {
+      return json.result.tools.map((t: { name: string; description?: string; title?: string; inputSchema?: { properties?: Record<string, { type?: string; description?: string }>; required?: string[] }; annotations?: { destructiveHint?: boolean; readOnlyHint?: boolean } }, idx: number) => ({
+        id: `tool-${server.name}-${idx + 1}`,
+        name: t.name,
+        server: server.name,
+        description: t.description || t.title || "",
+        parameters: Object.fromEntries(
+          Object.entries(t.inputSchema?.properties || {}).map(([k, v]) => [
+            k,
+            {
+              type: v.type || "string",
+              description: v.description || "",
+              required: t.inputSchema?.required?.includes(k) || false,
+            },
+          ])
+        ),
+        riskLevel: t.annotations?.destructiveHint
+          ? "critical"
+          : t.annotations?.readOnlyHint
+            ? "low"
+            : "medium",
+        category: "Cloud & Infrastructure",
+      }))
+    }
+  } catch {
+    // ignore
+  }
+  return []
+}
+
 export async function fetchDiscoveredTools(): Promise<McpTool[]> {
   // Only return tools for servers that user has explicitly configured
   const servers = await fetchDiscoveredServers()
@@ -616,6 +697,12 @@ export async function fetchDiscoveredTools(): Promise<McpTool[]> {
   }
 
   const serverNames = new Set(servers.map((s) => s.name))
+
+  // Fetch tools from remote servers dynamically
+  const remoteToolsNested = await Promise.all(
+    servers.filter((s) => s.url).map(fetchRemoteTools)
+  )
+  const remoteTools = remoteToolsNested.flat()
 
   // User-defined tools in storage
   let userTools: McpTool[] = []
@@ -632,7 +719,11 @@ export async function fetchDiscoveredTools(): Promise<McpTool[]> {
 
   // Pre-configured tool definitions matching the user's servers
   const matchingSeedTools = realToolsCatalog.filter((t) => serverNames.has(t.server))
-  const combined = [...userTools.filter((t) => serverNames.has(t.server)), ...matchingSeedTools]
+  const combined = [
+    ...remoteTools,
+    ...userTools.filter((t) => serverNames.has(t.server)),
+    ...matchingSeedTools.filter((t) => !remoteTools.some((rt) => rt.name === t.name)),
+  ]
   return combined
 }
 
@@ -658,51 +749,97 @@ export async function executeMcpTool(
   args: Record<string, unknown>
 ): Promise<{ success: boolean; result: unknown; latencyMs: number }> {
   const started = performance.now()
-  // Simulate execution latency
-  await new Promise((resolve) => setTimeout(resolve, 80 + Math.random() * 60))
-  const latency = Math.round(performance.now() - started)
+  const servers = await fetchDiscoveredServers()
+  const server = servers.find((s) => s.name === serverName)
 
   let resultData: unknown = { status: "executed", tool: toolName, server: serverName, args }
+  let isSuccess = true
 
-  if (toolName === "read_function_instructions") {
-    resultData = [
-      { offset: "0x100003fa0", mnemonic: "stp", operands: "x29, x30, [sp, #-0x10]!" },
-      { offset: "0x100003fa4", mnemonic: "mov", operands: "x29, sp" },
-      { offset: "0x100003fa8", mnemonic: "sub", operands: "sp, sp, #0x20" },
-      { offset: "0x100003fac", mnemonic: "bl", operands: "_security_token_validate" },
-      { offset: "0x100003fb0", mnemonic: "cbnz", operands: "w0, 0x100003fc4" },
-    ]
-  } else if (toolName === "procedure_pseudo_code") {
-    resultData = `int handle_mcp_request(struct mcp_frame *frame) {
-    if (!frame || !frame->payload) return -1;
-    if (security_check(frame->token) != 0) {
-        mcp_log_violation(frame->client_ip);
-        return 403;
+  if (server?.url) {
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(server.headers || {}),
+      }
+      if (server.authToken && !headers["Authorization"]) {
+        headers["Authorization"] = server.authToken.startsWith("Bearer ")
+          ? server.authToken
+          : `Bearer ${server.authToken}`
+      }
+
+      const res = await fetch(server.url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: `call-${Date.now()}`,
+          method: "tools/call",
+          params: {
+            name: toolName,
+            arguments: args,
+          },
+        }),
+      })
+
+      const json = await res.json()
+      if (json?.error) {
+        isSuccess = false
+        resultData = json.error
+      } else if (json?.result) {
+        resultData = json.result
+      } else {
+        resultData = json
+      }
+    } catch (err: unknown) {
+      isSuccess = false
+      const msg = err instanceof Error ? err.message : String(err)
+      resultData = { error: msg }
     }
-    return route_dispatch(frame);
-}`
-  } else if (toolName === "read_query" || toolName === "list_tables") {
-    resultData = [
-      { name: "users", type: "table", count: 12 },
-      { name: "api_keys", type: "table", count: 4 },
-      { name: "audit_logs", type: "table", count: 148 },
-    ]
-  } else if (toolName === "list_containers") {
-    resultData = [
-      { id: "c49f81a0e", name: "redis-cache", image: "redis:7-alpine", status: "Up 2 days", ports: "6379/tcp" },
-      { id: "e1082c4da", name: "postgres-dev", image: "postgres:16-alpine", status: "Up 4 hours", ports: "5432/tcp" },
-    ]
+  } else {
+    await new Promise((resolve) => setTimeout(resolve, 80 + Math.random() * 60))
+
+    if (toolName === "read_function_instructions") {
+      resultData = [
+        { offset: "0x100003fa0", mnemonic: "stp", operands: "x29, x30, [sp, #-0x10]!" },
+        { offset: "0x100003fa4", mnemonic: "mov", operands: "x29, sp" },
+        { offset: "0x100003fa8", mnemonic: "sub", operands: "sp, sp, #0x20" },
+        { offset: "0x100003fac", mnemonic: "bl", operands: "_security_token_validate" },
+        { offset: "0x100003fb0", mnemonic: "cbnz", operands: "w0, 0x100003fc4" },
+      ]
+    } else if (toolName === "procedure_pseudo_code") {
+      resultData = `int handle_mcp_request(struct mcp_frame *frame) {
+      if (!frame || !frame->payload) return -1;
+      if (security_check(frame->token) != 0) {
+          mcp_log_violation(frame->client_ip);
+          return 403;
+      }
+      return route_dispatch(frame);
+  }`
+    } else if (toolName === "read_query" || toolName === "list_tables") {
+      resultData = [
+        { name: "users", type: "table", count: 12 },
+        { name: "api_keys", type: "table", count: 4 },
+        { name: "audit_logs", type: "table", count: 148 },
+      ]
+    } else if (toolName === "list_containers") {
+      resultData = [
+        { id: "c49f81a0e", name: "redis-cache", image: "redis:7-alpine", status: "Up 2 days", ports: "6379/tcp" },
+        { id: "e1082c4da", name: "postgres-dev", image: "postgres:16-alpine", status: "Up 4 hours", ports: "5432/tcp" },
+      ]
+    }
   }
+
+  const latency = Math.max(1, Math.round(performance.now() - started))
 
   logRpcCall({
     method: "tools/call",
     server: serverName,
     target: toolName,
     latencyMs: latency,
-    status: "success",
-    details: `Tool ${toolName} executed successfully`,
+    status: isSuccess ? "success" : "error",
+    details: isSuccess ? `Tool ${toolName} executed successfully` : `Tool ${toolName} execution error`,
     clientIp: "127.0.0.1",
-    transport: "stdio",
+    transport: server?.transport || "http",
     requestPayload: JSON.stringify(
       {
         jsonrpc: "2.0",
@@ -724,7 +861,7 @@ export async function executeMcpTool(
     ),
   })
 
-  return { success: true, result: resultData, latencyMs: latency }
+  return { success: isSuccess, result: resultData, latencyMs: latency }
 }
 
 export function addCustomServer(newServer: {
