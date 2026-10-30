@@ -40,7 +40,7 @@ export interface RpcLog {
   responsePayload?: string
 }
 
-const SERVERS_STORAGE_KEY = "mcp_gateway_user_servers_v3"
+const SERVERS_STORAGE_KEY = "mcp_gateway_user_servers_v4"
 const RPC_LOGS_STORAGE_KEY = "mcp_gateway_rpc_logs_v3"
 
 // Clear old legacy seed keys from previous versions
@@ -48,6 +48,7 @@ if (typeof window !== "undefined") {
   try {
     localStorage.removeItem("mcp_gateway_rpc_logs_v2")
     localStorage.removeItem("mcp_gateway_servers_v2")
+    localStorage.removeItem("mcp_gateway_user_servers_v3")
   } catch {
     // ignore
   }
@@ -71,49 +72,22 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   }
 }
 
-export const initialCoolifyServer: McpServer = {
-  id: "srv-coolify",
-  name: "coolify",
-  transport: "http",
-  command: "",
-  args: [],
-  url: "http://45.136.237.171:8000/mcp",
-  source: "Manual (Gateway Config)",
-  status: "online",
-  latencyMs: 145,
-  toolsCount: 77,
-  resourcesCount: 0,
-  authToken: "6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded",
-  headers: {
-    Authorization: "Bearer 6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded",
-    "Content-Type": "application/json",
-  },
-}
-
-// User-managed servers with Coolify added to the active configuration list
+// User-managed servers (Manual configuration only, persists in localStorage)
 export async function fetchDiscoveredServers(): Promise<McpServer[]> {
   if (typeof window !== "undefined") {
     try {
       const saved = localStorage.getItem(SERVERS_STORAGE_KEY)
-      if (saved) {
+      if (saved !== null) {
         const parsed: McpServer[] = JSON.parse(saved)
         if (Array.isArray(parsed)) {
-          const hasCoolify = parsed.some((s) => s.name === "coolify" || s.name === "mcp coolify")
-          if (!hasCoolify) {
-            const updated = [initialCoolifyServer, ...parsed]
-            saveServers(updated)
-            return updated
-          }
           return parsed
         }
       }
     } catch {
       // ignore
     }
-    saveServers([initialCoolifyServer])
-    return [initialCoolifyServer]
   }
-  return [initialCoolifyServer]
+  return []
 }
 
 export const MCP_SERVERS_EVENT = "mcp_servers_updated"
@@ -894,6 +868,19 @@ export function addCustomServer(newServer: {
   const current = typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
   const updated = [server, ...current]
   saveServers(updated)
+
+  // Dynamically query remote tools count for HTTP / SSE servers
+  if (server.url) {
+    fetchRemoteTools(server).then((tools) => {
+      if (tools.length > 0) {
+        const fresh: McpServer[] =
+          typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
+        const withCount = fresh.map((s) => (s.id === server.id ? { ...s, toolsCount: tools.length } : s))
+        saveServers(withCount)
+      }
+    })
+  }
+
   return server
 }
 
