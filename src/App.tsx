@@ -5,6 +5,7 @@ import { OverviewView } from "@/components/overview/overview-view"
 import { SettingsView } from "@/components/settings/settings-view"
 import { ApiKeysView } from "@/components/tokens/api-keys-view"
 import { SecurityView } from "@/components/security/security-view"
+import { TrafficLogsView } from "@/components/logs/traffic-logs-view"
 import {
   SidebarInset,
   SidebarProvider,
@@ -54,6 +55,8 @@ export default function App() {
               <ApiKeysView />
             ) : activeTab === "security" ? (
               <SecurityView />
+            ) : activeTab === "logs" ? (
+              <TrafficLogsView />
             ) : (
               <OverviewView
                 onNavigate={setActiveTab}

@@ -31,6 +31,10 @@ export interface RpcLog {
   latencyMs: number
   status: "success" | "error"
   details?: string
+  clientIp?: string
+  transport?: "stdio" | "sse" | "http"
+  requestPayload?: string
+  responsePayload?: string
 }
 
 const SERVERS_STORAGE_KEY = "mcp_gateway_servers_v2"
@@ -219,6 +223,27 @@ export async function pingServer(server: McpServer): Promise<{ success: boolean;
         latencyMs: res.latency_ms,
         status: res.success ? "success" : "error",
         details: res.message,
+        clientIp: "127.0.0.1",
+        transport: server.transport,
+        requestPayload: JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: `ping-${Date.now()}`,
+            method: "ping",
+            params: { target, transport: server.transport },
+          },
+          null,
+          2
+        ),
+        responsePayload: JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: `ping-${Date.now()}`,
+            result: { success: res.success, latencyMs: res.latency_ms, message: res.message },
+          },
+          null,
+          2
+        ),
       })
       return { success: res.success, latencyMs: res.latency_ms, message: res.message }
     } catch {
@@ -245,6 +270,27 @@ export async function pingServer(server: McpServer): Promise<{ success: boolean;
         latencyMs: elapsed,
         status: "success",
         details: "HTTP Connection Verified (no-cors check)",
+        clientIp: "127.0.0.1",
+        transport: server.transport,
+        requestPayload: JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: `ping-${Date.now()}`,
+            method: "ping",
+            params: { url: server.url },
+          },
+          null,
+          2
+        ),
+        responsePayload: JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: `ping-${Date.now()}`,
+            result: { connected: true, latencyMs: elapsed },
+          },
+          null,
+          2
+        ),
       })
       return { success: true, latencyMs: elapsed, message: `Connected in ${elapsed}ms` }
     } catch (err) {
@@ -256,6 +302,27 @@ export async function pingServer(server: McpServer): Promise<{ success: boolean;
         latencyMs: elapsed,
         status: "error",
         details: String(err),
+        clientIp: "127.0.0.1",
+        transport: server.transport,
+        requestPayload: JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: `ping-${Date.now()}`,
+            method: "ping",
+            params: { url: server.url },
+          },
+          null,
+          2
+        ),
+        responsePayload: JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: `ping-${Date.now()}`,
+            error: { code: -32000, message: String(err) },
+          },
+          null,
+          2
+        ),
       })
       return { success: false, latencyMs: 0, message: `Failed to connect: ${String(err)}` }
     }
@@ -270,6 +337,27 @@ export async function pingServer(server: McpServer): Promise<{ success: boolean;
     latencyMs: elapsed,
     status: "success",
     details: "Stdio process target validated",
+    clientIp: "127.0.0.1",
+    transport: "stdio",
+    requestPayload: JSON.stringify(
+      {
+        jsonrpc: "2.0",
+        id: `ping-${Date.now()}`,
+        method: "ping",
+        params: { command: server.command, args: server.args },
+      },
+      null,
+      2
+    ),
+    responsePayload: JSON.stringify(
+      {
+        jsonrpc: "2.0",
+        id: `ping-${Date.now()}`,
+        result: { status: "executable_available", latencyMs: elapsed },
+      },
+      null,
+      2
+    ),
   })
   return { success: true, latencyMs: elapsed, message: `Command validated in ${elapsed}ms` }
 }
@@ -299,6 +387,35 @@ export function getRpcLogs(): RpcLog[] {
       latencyMs: 3,
       status: "success",
       details: "HTTP 200 OK",
+      clientIp: "127.0.0.1",
+      transport: "http",
+      requestPayload: JSON.stringify(
+        {
+          jsonrpc: "2.0",
+          id: "req-9remote-01",
+          method: "tools/call",
+          params: {
+            name: "get_remote_session",
+            arguments: { sessionId: "sess_live_9941a" },
+          },
+        },
+        null,
+        2
+      ),
+      responsePayload: JSON.stringify(
+        {
+          jsonrpc: "2.0",
+          id: "req-9remote-01",
+          result: {
+            status: "active",
+            protocol: "mcp/1.0",
+            tunnel: "connected",
+            activeStreams: 1,
+          },
+        },
+        null,
+        2
+      ),
     },
     {
       id: "log-2",
@@ -309,6 +426,35 @@ export function getRpcLogs(): RpcLog[] {
       latencyMs: 14,
       status: "success",
       details: "142 tools registered",
+      clientIp: "127.0.0.1",
+      transport: "stdio",
+      requestPayload: JSON.stringify(
+        {
+          jsonrpc: "2.0",
+          id: "req-rea-02",
+          method: "tools/list",
+          params: {},
+        },
+        null,
+        2
+      ),
+      responsePayload: JSON.stringify(
+        {
+          jsonrpc: "2.0",
+          id: "req-rea-02",
+          result: {
+            tools: [
+              { name: "read_function_instructions", description: "Disassemble native instructions" },
+              { name: "procedure_pseudo_code", description: "Decompile procedure into C pseudocode" },
+              { name: "inspect_native_instruction", description: "Inspect operands and flags" },
+              { name: "xrefs", description: "Query cross references to address" },
+            ],
+            total: 142,
+          },
+        },
+        null,
+        2
+      ),
     },
     {
       id: "log-3",
@@ -319,6 +465,36 @@ export function getRpcLogs(): RpcLog[] {
       latencyMs: 6,
       status: "success",
       details: "Execution completed",
+      clientIp: "127.0.0.1",
+      transport: "stdio",
+      requestPayload: JSON.stringify(
+        {
+          jsonrpc: "2.0",
+          id: "req-sqlite-03",
+          method: "tools/call",
+          params: {
+            name: "read_query",
+            arguments: { query: "SELECT * FROM schema_migrations ORDER BY version DESC LIMIT 5;" },
+          },
+        },
+        null,
+        2
+      ),
+      responsePayload: JSON.stringify(
+        {
+          jsonrpc: "2.0",
+          id: "req-sqlite-03",
+          result: {
+            rows: [
+              { version: "20261025001", name: "init_tables" },
+              { version: "20261028002", name: "add_mcp_routing_indices" },
+            ],
+            rowCount: 2,
+          },
+        },
+        null,
+        2
+      ),
     },
   ]
   saveRpcLogs(initialLogs)
@@ -327,18 +503,25 @@ export function getRpcLogs(): RpcLog[] {
 
 export function saveRpcLogs(logs: RpcLog[]) {
   if (typeof window !== "undefined") {
-    localStorage.setItem(RPC_LOGS_STORAGE_KEY, JSON.stringify(logs.slice(0, 50)))
+    localStorage.setItem(RPC_LOGS_STORAGE_KEY, JSON.stringify(logs.slice(0, 100)))
   }
 }
 
-export function logRpcCall(entry: Omit<RpcLog, "id" | "time">) {
+export function clearRpcLogs() {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(RPC_LOGS_STORAGE_KEY)
+  }
+}
+
+export function logRpcCall(entry: Omit<RpcLog, "id" | "time">): RpcLog {
   const newLog: RpcLog = {
     id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     time: new Date().toLocaleTimeString("en-US", { hour12: false }),
     ...entry,
   }
   const current = getRpcLogs()
-  const updated = [newLog, ...current].slice(0, 50)
+  const updated = [newLog, ...current].slice(0, 100)
   saveRpcLogs(updated)
+  return newLog
 }
 
