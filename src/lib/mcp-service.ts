@@ -76,9 +76,35 @@ export async function fetchDiscoveredServers(): Promise<McpServer[]> {
   return []
 }
 
+export const MCP_SERVERS_EVENT = "mcp_servers_updated"
+
 export function saveServers(servers: McpServer[]) {
   if (typeof window !== "undefined") {
     localStorage.setItem(SERVERS_STORAGE_KEY, JSON.stringify(servers))
+    window.dispatchEvent(new CustomEvent(MCP_SERVERS_EVENT, { detail: servers }))
+  }
+}
+
+export function subscribeToServers(callback: (servers: McpServer[]) => void): () => void {
+  if (typeof window === "undefined") return () => {}
+
+  const handleUpdate = () => {
+    fetchDiscoveredServers().then(callback)
+  }
+
+  window.addEventListener(MCP_SERVERS_EVENT, handleUpdate)
+  window.addEventListener("storage", handleUpdate)
+
+  // Initial call
+  handleUpdate()
+
+  // Periodic poll to ensure real-time consistency
+  const timer = setInterval(handleUpdate, 1000)
+
+  return () => {
+    window.removeEventListener(MCP_SERVERS_EVENT, handleUpdate)
+    window.removeEventListener("storage", handleUpdate)
+    clearInterval(timer)
   }
 }
 

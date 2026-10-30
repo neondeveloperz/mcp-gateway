@@ -25,7 +25,12 @@ import {
   CircleHelpIcon,
   CpuIcon,
 } from "lucide-react"
-import { fetchDiscoveredServers, type McpServer } from "@/lib/mcp-service"
+import {
+  type McpServer,
+  subscribeToServers,
+  fetchDiscoveredTools,
+  fetchDiscoveredResources,
+} from "@/lib/mcp-service"
 
 export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   activeItem?: string
@@ -40,14 +45,24 @@ export function AppSidebar({
   ...props
 }: AppSidebarProps) {
   const [servers, setServers] = React.useState<McpServer[]>([])
+  const [toolsCount, setToolsCount] = React.useState<number>(0)
+  const [resourcesCount, setResourcesCount] = React.useState<number>(0)
 
   React.useEffect(() => {
-    fetchDiscoveredServers().then(setServers)
+    const unsubscribe = subscribeToServers((updated) => {
+      setServers(updated)
+      fetchDiscoveredTools().then((tools) => {
+        setToolsCount(tools.length)
+      })
+      const res = fetchDiscoveredResources()
+      setResourcesCount(res.length)
+    })
+    return unsubscribe
   }, [])
 
   const onlineServers = servers.filter((s) => s.status === "online").length
-  const totalTools = servers.reduce((acc, s) => acc + (s.toolsCount || 0), 0)
-  const totalResources = servers.reduce((acc, s) => acc + (s.resourcesCount || 0), 0)
+  const totalTools = toolsCount > 0 ? toolsCount : servers.reduce((acc, s) => acc + (s.toolsCount || 0), 0)
+  const totalResources = resourcesCount > 0 ? resourcesCount : servers.reduce((acc, s) => acc + (s.resourcesCount || 0), 0)
 
   const navMain: NavMainItem[] = [
     {

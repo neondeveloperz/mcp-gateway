@@ -18,7 +18,7 @@ import {
 import {
   type McpServer,
   type RpcLog,
-  fetchDiscoveredServers,
+  subscribeToServers,
   getRpcLogs,
 } from "@/lib/mcp-service"
 
@@ -35,10 +35,15 @@ export function OverviewStats({
   React.useEffect(() => {
     if (propServers) {
       setServers(propServers)
-    } else {
-      fetchDiscoveredServers().then(setServers)
+      setLogs(getRpcLogs())
+      return
     }
-    setLogs(getRpcLogs())
+
+    const unsubscribe = subscribeToServers((updated) => {
+      setServers(updated)
+      setLogs(getRpcLogs())
+    })
+    return unsubscribe
   }, [propServers])
 
   const onlineServers = servers.filter((s) => s.status === "online").length

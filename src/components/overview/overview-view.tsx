@@ -4,7 +4,7 @@ import { OverviewStats } from "@/components/overview/overview-stats"
 import { OverviewServers } from "@/components/overview/overview-servers"
 import { OverviewChart } from "@/components/overview/overview-chart"
 import { OverviewRecentCalls } from "@/components/overview/overview-recent-calls"
-import { type McpServer, fetchDiscoveredServers } from "@/lib/mcp-service"
+import { type McpServer, subscribeToServers } from "@/lib/mcp-service"
 
 export function OverviewView({
   onNavigate,
@@ -16,7 +16,8 @@ export function OverviewView({
   const [servers, setServers] = React.useState<McpServer[]>([])
 
   React.useEffect(() => {
-    fetchDiscoveredServers().then(setServers)
+    const unsubscribe = subscribeToServers(setServers)
+    return unsubscribe
   }, [])
 
   const onlineCount = servers.filter((s) => s.status === "online").length
