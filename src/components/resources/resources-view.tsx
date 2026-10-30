@@ -41,6 +41,8 @@ import {
   fetchDiscoveredResources,
   fetchDiscoveredPrompts,
   fetchDiscoveredServers,
+  readRemoteResource,
+  subscribeToServers,
   type McpResource,
   type McpPrompt,
   type McpServer,
@@ -55,11 +57,24 @@ export function ResourcesView() {
   const [activeResource, setActiveResource] = React.useState<McpResource | null>(null)
   const [isResourceOpen, setIsResourceOpen] = React.useState(false)
 
-  React.useEffect(() => {
-    setResources(fetchDiscoveredResources())
-    setPrompts(fetchDiscoveredPrompts())
-    fetchDiscoveredServers().then(setServers)
+  const loadData = React.useCallback(async () => {
+    const srvs = await fetchDiscoveredServers()
+    setServers(srvs)
+    const [resList, promptList] = await Promise.all([
+      fetchDiscoveredResources(),
+      fetchDiscoveredPrompts(),
+    ])
+    setResources(resList)
+    setPrompts(promptList)
   }, [])
+
+  React.useEffect(() => {
+    loadData()
+    const unsubscribe = subscribeToServers(() => {
+      loadData()
+    })
+    return unsubscribe
+  }, [loadData])
 
   const filteredResources = resources.filter((res) => {
     const matchSearch =
@@ -78,9 +93,20 @@ export function ResourcesView() {
     return matchSearch && matchServer
   })
 
-  const handlePreviewResource = (res: McpResource) => {
+  const handlePreviewResource = async (res: McpResource) => {
     setActiveResource(res)
     setIsResourceOpen(true)
+    if (!res.content) {
+      try {
+        const full = await readRemoteResource(res)
+        if (full?.content) {
+          setActiveResource(full)
+          setResources((prev) => prev.map((r) => (r.id === res.id ? full : r)))
+        }
+      } catch {
+        // ignore
+      }
+    }
   }
 
   const handleCopy = (text: string, label: string) => {

@@ -483,8 +483,8 @@ fn handle_json_rpc(body_str: &str) -> serde_json::Value {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {
                         "tools": { "listChanged": true },
-                        "resources": { "listChanged": false },
-                        "prompts": { "listChanged": false }
+                        "resources": { "listChanged": true },
+                        "prompts": { "listChanged": true }
                     },
                     "serverInfo": {
                         "name": "mcp-gateway-native",
@@ -598,6 +598,166 @@ fn handle_json_rpc(body_str: &str) -> serde_json::Value {
                 "jsonrpc": "2.0",
                 "id": id,
                 "error": { "code": -32603, "message": format!("Tool '{}' not found or execution failed on downstream servers", tool_name) }
+            })
+        }
+        "resources/list" => {
+            let servers = load_configured_servers();
+            let mut all_resources: Vec<serde_json::Value> = Vec::new();
+
+            for srv in servers {
+                if srv.status.as_deref() == Some("standby") {
+                    continue;
+                }
+                if let Some(url) = srv.url {
+                    if url.is_empty() {
+                        continue;
+                    }
+                    let payload = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": format!("res-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)),
+                        "method": "resources/list",
+                        "params": {}
+                    }).to_string();
+
+                    if let Ok(res_str) = execute_remote_mcp(url, srv.auth_token, srv.headers, payload) {
+                        if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
+                            if let Some(arr) = downstream_json.get("result").and_then(|r| r.get("resources")).and_then(|t| t.as_array()) {
+                                for r in arr {
+                                    all_resources.push(r.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {
+                    "resources": all_resources
+                }
+            })
+        }
+        "resources/read" => {
+            let uri = params.get("uri").and_then(|u| u.as_str()).unwrap_or("");
+            let payload = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": format!("read-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)),
+                "method": "resources/read",
+                "params": {
+                    "uri": uri
+                }
+            }).to_string();
+
+            let servers = load_configured_servers();
+            for srv in servers {
+                if srv.status.as_deref() == Some("standby") {
+                    continue;
+                }
+                if let Some(url) = srv.url {
+                    if url.is_empty() {
+                        continue;
+                    }
+                    if let Ok(res_str) = execute_remote_mcp(url, srv.auth_token, srv.headers, payload.clone()) {
+                        if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
+                            if let Some(res) = downstream_json.get("result") {
+                                return serde_json::json!({
+                                    "jsonrpc": "2.0",
+                                    "id": id,
+                                    "result": res
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": { "code": -32002, "message": format!("Resource '{}' not found", uri) }
+            })
+        }
+        "prompts/list" => {
+            let servers = load_configured_servers();
+            let mut all_prompts: Vec<serde_json::Value> = Vec::new();
+
+            for srv in servers {
+                if srv.status.as_deref() == Some("standby") {
+                    continue;
+                }
+                if let Some(url) = srv.url {
+                    if url.is_empty() {
+                        continue;
+                    }
+                    let payload = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": format!("prompts-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)),
+                        "method": "prompts/list",
+                        "params": {}
+                    }).to_string();
+
+                    if let Ok(res_str) = execute_remote_mcp(url, srv.auth_token, srv.headers, payload) {
+                        if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
+                            if let Some(arr) = downstream_json.get("result").and_then(|r| r.get("prompts")).and_then(|t| t.as_array()) {
+                                for p in arr {
+                                    all_prompts.push(p.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {
+                    "prompts": all_prompts
+                }
+            })
+        }
+        "prompts/get" => {
+            let prompt_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+            let arguments = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+            let payload = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": format!("prompt-get-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)),
+                "method": "prompts/get",
+                "params": {
+                    "name": prompt_name,
+                    "arguments": arguments
+                }
+            }).to_string();
+
+            let servers = load_configured_servers();
+            for srv in servers {
+                if srv.status.as_deref() == Some("standby") {
+                    continue;
+                }
+                if let Some(url) = srv.url {
+                    if url.is_empty() {
+                        continue;
+                    }
+                    if let Ok(res_str) = execute_remote_mcp(url, srv.auth_token, srv.headers, payload.clone()) {
+                        if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
+                            if let Some(res) = downstream_json.get("result") {
+                                return serde_json::json!({
+                                    "jsonrpc": "2.0",
+                                    "id": id,
+                                    "result": res
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": { "code": -32602, "message": format!("Prompt '{}' not found", prompt_name) }
             })
         }
         _ => {

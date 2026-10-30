@@ -353,10 +353,6 @@ export interface McpPrompt {
 
 const realToolsCatalog: McpTool[] = []
 
-const realResourcesCatalog: McpResource[] = []
-
-const realPromptsCatalog: McpPrompt[] = []
-
 interface McpToolsListResponse {
   result?: {
     tools?: Array<{
@@ -510,20 +506,257 @@ export async function fetchDiscoveredTools(): Promise<McpTool[]> {
   return combined
 }
 
-export function fetchDiscoveredResources(): McpResource[] {
-  const servers: McpServer[] =
-    typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
-  if (servers.length === 0) return []
-  const serverNames = new Set(servers.map((s) => s.name))
-  return realResourcesCatalog.filter((r) => serverNames.has(r.server))
+export async function fetchRemoteResources(server: McpServer): Promise<McpResource[]> {
+  if (!server.url) return []
+  try {
+    const payload = JSON.stringify({
+      jsonrpc: "2.0",
+      id: `res-${Date.now()}`,
+      method: "resources/list",
+      params: {},
+    })
+
+    let json: { result?: { resources?: Array<{ name?: string; title?: string; uri?: string; mimeType?: string; description?: string; text?: string }> } } | null = null
+
+    const effectiveToken =
+      server.authToken ||
+      server.headers?.["Authorization"] ||
+      server.headers?.["authorization"] ||
+      null
+
+    if (isTauri()) {
+      try {
+        const raw = await invoke<string>("execute_remote_mcp", {
+          url: server.url,
+          authToken: effectiveToken,
+          headers: server.headers || null,
+          payload,
+        })
+        json = JSON.parse(raw)
+      } catch (tauriErr) {
+        console.warn("Tauri invoke execute_remote_mcp failed, falling back to fetch:", tauriErr)
+      }
+    }
+
+    if (!json) {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        ...(server.headers || {}),
+      }
+      if (server.authToken && !headers["Authorization"] && !headers["authorization"]) {
+        headers["Authorization"] = server.authToken.startsWith("Bearer ")
+          ? server.authToken
+          : `Bearer ${server.authToken}`
+      }
+      const res = await fetch(server.url, {
+        method: "POST",
+        headers,
+        body: payload,
+      })
+      if (!res.ok) return []
+      json = await res.json()
+    }
+
+    if (json?.result?.resources && Array.isArray(json.result.resources)) {
+      return json.result.resources.map((r, idx) => ({
+        id: `res-${server.name}-${idx + 1}`,
+        uri: r.uri || "",
+        name: r.name || r.title || `Resource ${idx + 1}`,
+        server: server.name,
+        mimeType: r.mimeType || "application/json",
+        description: r.description || r.title || "",
+        content: typeof r.text === "string" ? r.text : undefined,
+      }))
+    }
+  } catch {
+    // ignore
+  }
+  return []
 }
 
-export function fetchDiscoveredPrompts(): McpPrompt[] {
-  const servers: McpServer[] =
-    typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
+export async function fetchRemotePrompts(server: McpServer): Promise<McpPrompt[]> {
+  if (!server.url) return []
+  try {
+    const payload = JSON.stringify({
+      jsonrpc: "2.0",
+      id: `prompt-${Date.now()}`,
+      method: "prompts/list",
+      params: {},
+    })
+
+    let json: { result?: { prompts?: Array<{ name?: string; title?: string; description?: string; arguments?: Array<{ name?: string; description?: string; required?: boolean }> }> } } | null = null
+
+    const effectiveToken =
+      server.authToken ||
+      server.headers?.["Authorization"] ||
+      server.headers?.["authorization"] ||
+      null
+
+    if (isTauri()) {
+      try {
+        const raw = await invoke<string>("execute_remote_mcp", {
+          url: server.url,
+          authToken: effectiveToken,
+          headers: server.headers || null,
+          payload,
+        })
+        json = JSON.parse(raw)
+      } catch (tauriErr) {
+        console.warn("Tauri invoke execute_remote_mcp failed, falling back to fetch:", tauriErr)
+      }
+    }
+
+    if (!json) {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        ...(server.headers || {}),
+      }
+      if (server.authToken && !headers["Authorization"] && !headers["authorization"]) {
+        headers["Authorization"] = server.authToken.startsWith("Bearer ")
+          ? server.authToken
+          : `Bearer ${server.authToken}`
+      }
+      const res = await fetch(server.url, {
+        method: "POST",
+        headers,
+        body: payload,
+      })
+      if (!res.ok) return []
+      json = await res.json()
+    }
+
+    if (json?.result?.prompts && Array.isArray(json.result.prompts)) {
+      return json.result.prompts.map((p, idx) => ({
+        id: `prompt-${server.name}-${idx + 1}`,
+        name: p.name || `prompt_${idx + 1}`,
+        server: server.name,
+        description: p.description || p.title || "",
+        arguments: Array.isArray(p.arguments)
+          ? p.arguments.map((a) => ({
+              name: a.name || "",
+              description: a.description || "",
+              required: Boolean(a.required),
+            }))
+          : [],
+      }))
+    }
+  } catch {
+    // ignore
+  }
+  return []
+}
+
+export async function readRemoteResource(resource: McpResource): Promise<McpResource> {
+  const servers = await fetchDiscoveredServers()
+  const server = servers.find((s) => s.name === resource.server)
+  if (!server?.url) return resource
+
+  try {
+    const payload = JSON.stringify({
+      jsonrpc: "2.0",
+      id: `read-${Date.now()}`,
+      method: "resources/read",
+      params: { uri: resource.uri },
+    })
+
+    let json: { result?: { contents?: Array<{ text?: string } | string> } } | null = null
+
+    const effectiveToken =
+      server.authToken ||
+      server.headers?.["Authorization"] ||
+      server.headers?.["authorization"] ||
+      null
+
+    if (isTauri()) {
+      try {
+        const raw = await invoke<string>("execute_remote_mcp", {
+          url: server.url,
+          authToken: effectiveToken,
+          headers: server.headers || null,
+          payload,
+        })
+        json = JSON.parse(raw)
+      } catch {
+        // fallback
+      }
+    }
+
+    if (!json) {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        ...(server.headers || {}),
+      }
+      if (server.authToken && !headers["Authorization"] && !headers["authorization"]) {
+        headers["Authorization"] = server.authToken.startsWith("Bearer ")
+          ? server.authToken
+          : `Bearer ${server.authToken}`
+      }
+      const res = await fetch(server.url, {
+        method: "POST",
+        headers,
+        body: payload,
+      })
+      if (res.ok) {
+        json = await res.json()
+      }
+    }
+
+    if (json?.result?.contents && Array.isArray(json.result.contents)) {
+      const first = json.result.contents[0]
+      const textContent =
+        typeof first === "string"
+          ? first
+          : first?.text || JSON.stringify(first, null, 2)
+      return {
+        ...resource,
+        content: textContent,
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return resource
+}
+
+export async function fetchDiscoveredResources(): Promise<McpResource[]> {
+  const servers = await fetchDiscoveredServers()
   if (servers.length === 0) return []
-  const serverNames = new Set(servers.map((s) => s.name))
-  return realPromptsCatalog.filter((p) => serverNames.has(p.server))
+
+  const remoteNested = await Promise.all(
+    servers.filter((s) => s.url).map(async (srv) => {
+      const resList = await fetchRemoteResources(srv)
+      return { server: srv, resources: resList }
+    })
+  )
+
+  let changed = false
+  const updatedServers = servers.map((srv) => {
+    const entry = remoteNested.find((r) => r.server.id === srv.id)
+    if (entry && srv.resourcesCount !== entry.resources.length) {
+      changed = true
+      return { ...srv, resourcesCount: entry.resources.length }
+    }
+    return srv
+  })
+  if (changed) {
+    saveServers(updatedServers)
+  }
+
+  return remoteNested.flatMap((r) => r.resources)
+}
+
+export async function fetchDiscoveredPrompts(): Promise<McpPrompt[]> {
+  const servers = await fetchDiscoveredServers()
+  if (servers.length === 0) return []
+
+  const remoteNested = await Promise.all(
+    servers.filter((s) => s.url).map(fetchRemotePrompts)
+  )
+  return remoteNested.flat()
 }
 
 export async function executeMcpTool(

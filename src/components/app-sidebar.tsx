@@ -54,8 +54,9 @@ export function AppSidebar({
       fetchDiscoveredTools().then((tools) => {
         setToolsCount(tools.length)
       })
-      const res = fetchDiscoveredResources()
-      setResourcesCount(res.length)
+      fetchDiscoveredResources().then((res) => {
+        setResourcesCount(res.length)
+      })
     })
     return unsubscribe
   }, [])
