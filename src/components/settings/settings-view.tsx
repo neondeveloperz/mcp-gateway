@@ -33,6 +33,7 @@ import {
   LockIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { TokenManager } from "@/components/tokens/token-manager"
 
 export interface GatewayConfig {
   // Network
@@ -485,6 +486,9 @@ export function SettingsView() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Token Generation & Management */}
+          <TokenManager />
         </TabsContent>
 
         {/* 3. Execution & Limits */}

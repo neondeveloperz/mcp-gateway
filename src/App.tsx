@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { OverviewView } from "@/components/overview/overview-view"
 import { SettingsView } from "@/components/settings/settings-view"
+import { ApiKeysView } from "@/components/tokens/api-keys-view"
 import {
   SidebarInset,
   SidebarProvider,
@@ -48,6 +49,8 @@ export default function App() {
           <main className="flex-1 overflow-y-auto">
             {activeTab === "settings" ? (
               <SettingsView />
+            ) : activeTab === "keys" ? (
+              <ApiKeysView />
             ) : (
               <OverviewView
                 onNavigate={setActiveTab}
