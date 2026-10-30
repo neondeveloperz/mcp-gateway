@@ -159,7 +159,7 @@ export function AppSidebar({
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold tracking-tight">MCP Gateway</span>
-                <span className="truncate text-xs text-muted-foreground">v0.1.0 · Desktop Core</span>
+                <span className="truncate text-xs text-muted-foreground">version 0.1.0</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
