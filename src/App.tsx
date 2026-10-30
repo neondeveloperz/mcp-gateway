@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { OverviewView } from "@/components/overview/overview-view"
+import { SettingsView } from "@/components/settings/settings-view"
 import {
   SidebarInset,
   SidebarProvider,
@@ -45,10 +46,14 @@ export default function App() {
         <SidebarInset>
           <SiteHeader title={tabTitles[activeTab] ?? "Overview"} />
           <main className="flex-1 overflow-y-auto">
-            <OverviewView
-              onNavigate={setActiveTab}
-              onAddServer={() => setActiveTab("servers")}
-            />
+            {activeTab === "settings" ? (
+              <SettingsView />
+            ) : (
+              <OverviewView
+                onNavigate={setActiveTab}
+                onAddServer={() => setActiveTab("servers")}
+              />
+            )}
           </main>
         </SidebarInset>
       </SidebarProvider>
