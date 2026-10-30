@@ -220,110 +220,132 @@ export function OverviewServers({
           </form>
         )}
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {servers.map((server) => {
-            const isOnline = server.status === "online"
-            const displayCmd = server.url || `${server.command} ${server.args.join(" ")}`.trim()
-            return (
-              <div
-                key={server.id}
-                className={`relative flex flex-col justify-between rounded-lg border p-3.5 transition-all ${
-                  isOnline
-                    ? "border-border/70 bg-card hover:border-primary/40 shadow-2xs"
-                    : "border-border/40 bg-muted/20 opacity-80"
-                }`}
+        {servers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/10 p-8 text-center">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary mb-3">
+              <ServerIcon className="size-6" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">No MCP Servers Added Yet</h3>
+            <p className="mt-1 text-xs text-muted-foreground max-w-sm">
+              Your gateway is clean and ready. Add your first Stdio subprocess, SSE endpoint, or HTTP server to start orchestrating tools.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => setShowAddServer(true)}
+                className="cursor-pointer gap-1.5 text-xs h-8 bg-primary text-primary-foreground font-medium"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="truncate font-semibold text-sm">{server.name}</span>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] uppercase font-semibold ${
-                          server.transport === "sse"
-                            ? "border-purple-500/30 text-purple-400 bg-purple-500/10"
-                            : server.transport === "http"
-                              ? "border-indigo-500/30 text-indigo-400 bg-indigo-500/10"
-                              : "border-sky-500/30 text-sky-400 bg-sky-500/10"
-                        }`}
-                      >
-                        {server.transport}
-                      </Badge>
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                          isOnline
-                            ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                            : "bg-muted text-muted-foreground border border-border/50"
-                        }`}
-                      >
-                        <span
-                          className={`size-1.5 rounded-full ${
-                            isOnline ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/60"
+                <PlusIcon className="size-3.5" />
+                <span>Add Your First Server</span>
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {servers.map((server) => {
+              const isOnline = server.status === "online"
+              const displayCmd = server.url || `${server.command} ${server.args.join(" ")}`.trim()
+              return (
+                <div
+                  key={server.id}
+                  className={`relative flex flex-col justify-between rounded-lg border p-3.5 transition-all ${
+                    isOnline
+                      ? "border-border/70 bg-card hover:border-primary/40 shadow-2xs"
+                      : "border-border/40 bg-muted/20 opacity-80"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate font-semibold text-sm">{server.name}</span>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] uppercase font-semibold ${
+                            server.transport === "sse"
+                              ? "border-purple-500/30 text-purple-400 bg-purple-500/10"
+                              : server.transport === "http"
+                                ? "border-indigo-500/30 text-indigo-400 bg-indigo-500/10"
+                                : "border-sky-500/30 text-sky-400 bg-sky-500/10"
                           }`}
-                        />
-                        {isOnline ? "Online" : "Standby"}
-                      </span>
+                        >
+                          {server.transport}
+                        </Badge>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                            isOnline
+                              ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                              : "bg-muted text-muted-foreground border border-border/50"
+                          }`}
+                        >
+                          <span
+                            className={`size-1.5 rounded-full ${
+                              isOnline ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/60"
+                            }`}
+                          />
+                          {isOnline ? "Online" : "Standby"}
+                        </span>
+                      </div>
+                      <p className="truncate font-mono text-[11px] text-muted-foreground" title={displayCmd}>
+                        {displayCmd}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/80 truncate">
+                        Src: {server.source}
+                      </p>
                     </div>
-                    <p className="truncate font-mono text-[11px] text-muted-foreground" title={displayCmd}>
-                      {displayCmd}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground/80 truncate">
-                      Src: {server.source}
-                    </p>
                   </div>
-                </div>
 
-                <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-2.5 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1 font-medium">
-                      <WrenchIcon className="size-3.5 text-primary" />
-                      <span>{server.toolsCount} tools</span>
-                    </span>
-                    {isOnline && (
-                      <span className="flex items-center gap-1 font-mono text-[11px] text-emerald-500">
-                        <ClockIcon className="size-3" />
-                        <span>{server.latencyMs}ms</span>
+                  <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-2.5 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1 font-medium">
+                        <WrenchIcon className="size-3.5 text-primary" />
+                        <span>{server.toolsCount} tools</span>
                       </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handlePing(server)}
-                      disabled={pingingId === server.id}
-                      className="h-7 cursor-pointer px-2 text-xs"
-                      title="Test live roundtrip ping"
-                    >
-                      <ZapIcon className={`size-3.5 ${pingingId === server.id ? "animate-bounce text-amber-400" : ""}`} />
-                      <span className="ml-1">Ping</span>
-                    </Button>
-                    <Button
-                      variant={isOnline ? "outline" : "default"}
-                      size="sm"
-                      onClick={() => handleToggle(server.id)}
-                      className={`h-7 cursor-pointer px-2 text-xs ${
-                        isOnline ? "text-destructive hover:text-destructive" : ""
-                      }`}
-                    >
-                      {isOnline ? (
-                        <>
-                          <SquareIcon className="size-3 mr-1 fill-current" />
-                          <span>Stop</span>
-                        </>
-                      ) : (
-                        <>
-                          <PlayIcon className="size-3 mr-1 fill-current" />
-                          <span>Start</span>
-                        </>
+                      {isOnline && (
+                        <span className="flex items-center gap-1 font-mono text-[11px] text-emerald-500">
+                          <ClockIcon className="size-3" />
+                          <span>{server.latencyMs}ms</span>
+                        </span>
                       )}
-                    </Button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handlePing(server)}
+                        disabled={pingingId === server.id}
+                        className="h-7 cursor-pointer px-2 text-xs"
+                        title="Test live roundtrip ping"
+                      >
+                        <ZapIcon className={`size-3.5 ${pingingId === server.id ? "animate-bounce text-amber-400" : ""}`} />
+                        <span className="ml-1">Ping</span>
+                      </Button>
+                      <Button
+                        variant={isOnline ? "outline" : "default"}
+                        size="sm"
+                        onClick={() => handleToggle(server.id)}
+                        className={`h-7 cursor-pointer px-2 text-xs ${
+                          isOnline ? "text-destructive hover:text-destructive" : ""
+                        }`}
+                      >
+                        {isOnline ? (
+                          <>
+                            <SquareIcon className="size-3 mr-1 fill-current" />
+                            <span>Stop</span>
+                          </>
+                        ) : (
+                          <>
+                            <PlayIcon className="size-3 mr-1 fill-current" />
+                            <span>Start</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

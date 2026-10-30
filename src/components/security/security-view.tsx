@@ -251,8 +251,11 @@ export function SecurityView() {
     }, 1200)
   }
 
+  const activeServerNames = new Set(servers.map((s) => s.name))
   const filteredRules = rules.filter(
-    (r) => selectedServerFilter === "all" || r.serverName === selectedServerFilter
+    (r) =>
+      (selectedServerFilter === "all" || r.serverName === selectedServerFilter) &&
+      (servers.length === 0 || activeServerNames.has(r.serverName))
   )
 
   const getRiskBadge = (risk: ToolRule["riskLevel"]) => {
@@ -454,7 +457,14 @@ export function SecurityView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRules.map((rule) => {
+                    {filteredRules.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-12 text-center text-xs text-muted-foreground">
+                          No tool authorization rules active. Add an MCP server to configure execution policies.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredRules.map((rule) => {
                       const riskBadge = getRiskBadge(rule.riskLevel)
                       return (
                         <TableRow key={rule.id} className="hover:bg-muted/30 transition-colors">
@@ -505,7 +515,7 @@ export function SecurityView() {
                           </TableCell>
                         </TableRow>
                       )
-                    })}
+                    }))}
                   </TableBody>
                 </Table>
               </div>

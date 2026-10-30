@@ -181,8 +181,14 @@ export function ResourcesView() {
                   <TableBody>
                     {filteredResources.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="py-12 text-center text-xs text-muted-foreground">
-                          No MCP resources found matching filter.
+                        <TableCell colSpan={6} className="py-16 text-center text-xs text-muted-foreground">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <FolderCodeIcon className="size-8 text-muted-foreground/60" />
+                            <span className="font-semibold text-foreground text-sm">No MCP Resources Available</span>
+                            <p className="text-xs text-muted-foreground max-w-sm">
+                              Resources will appear once you configure an MCP server that exposes context URIs.
+                            </p>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -238,67 +244,77 @@ export function ResourcesView() {
 
         {/* Tab 2: Prompts */}
         <TabsContent value="prompts" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPrompts.map((prompt) => (
-              <Card key={prompt.id} className="flex flex-col justify-between">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="gap-1 font-mono text-[10px]">
-                      <ServerIcon className="size-2.5 text-primary" />
-                      {prompt.server}
-                    </Badge>
-                    <SparklesIcon className="size-3.5 text-amber-400" />
-                  </div>
-                  <CardTitle className="text-sm font-bold font-mono tracking-tight pt-1">
-                    {prompt.name}
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    {prompt.description}
-                  </CardDescription>
-                </CardHeader>
+          {filteredPrompts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/10 p-12 text-center">
+              <MessageSquareCodeIcon className="size-8 text-muted-foreground/60 mb-2" />
+              <h3 className="text-sm font-semibold text-foreground">No Prompt Templates Available</h3>
+              <p className="text-xs text-muted-foreground max-w-sm mt-1">
+                Prompts will appear here once you register MCP servers providing prompt capabilities.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPrompts.map((prompt) => (
+                <Card key={prompt.id} className="flex flex-col justify-between">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="gap-1 font-mono text-[10px]">
+                        <ServerIcon className="size-2.5 text-primary" />
+                        {prompt.server}
+                      </Badge>
+                      <SparklesIcon className="size-3.5 text-amber-400" />
+                    </div>
+                    <CardTitle className="text-sm font-bold font-mono tracking-tight pt-1">
+                      {prompt.name}
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      {prompt.description}
+                    </CardDescription>
+                  </CardHeader>
 
-                <CardContent className="space-y-2">
-                  <span className="text-[11px] font-semibold text-muted-foreground">Required Arguments:</span>
-                  <div className="space-y-1">
-                    {prompt.arguments.map((arg) => (
-                      <div
-                        key={arg.name}
-                        className="flex items-center justify-between text-xs rounded border bg-muted/20 px-2 py-1"
-                      >
-                        <span className="font-mono text-foreground font-medium">{arg.name}</span>
-                        {arg.required && (
-                          <span className="text-[10px] text-amber-500 font-semibold">required</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
+                  <CardContent className="space-y-2">
+                    <span className="text-[11px] font-semibold text-muted-foreground">Required Arguments:</span>
+                    <div className="space-y-1">
+                      {prompt.arguments.map((arg) => (
+                        <div
+                          key={arg.name}
+                          className="flex items-center justify-between text-xs rounded border bg-muted/20 px-2 py-1"
+                        >
+                          <span className="font-mono text-foreground font-medium">{arg.name}</span>
+                          {arg.required && (
+                            <span className="text-[10px] text-amber-500 font-semibold">required</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
 
-                <CardFooter className="border-t border-border/40 pt-3 flex items-center justify-between">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCopy(prompt.name, "Prompt Name")}
-                    className="h-7 px-2 text-xs cursor-pointer gap-1"
-                  >
-                    <CopyIcon className="size-3" />
-                    Copy
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      toast.info(`Prompt Activated: ${prompt.name}`, {
-                        description: `Prepared arguments for server ${prompt.server}`,
-                      })
-                    }
-                    className="h-7 px-2.5 text-xs cursor-pointer bg-primary text-primary-foreground font-medium"
-                  >
-                    <span>Use Template</span>
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
+                  <CardFooter className="border-t border-border/40 pt-3 flex items-center justify-between">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopy(prompt.name, "Prompt Name")}
+                      className="h-7 px-2 text-xs cursor-pointer gap-1"
+                    >
+                      <CopyIcon className="size-3" />
+                      Copy
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        toast.info(`Prompt Activated: ${prompt.name}`, {
+                          description: `Prepared arguments for server ${prompt.server}`,
+                        })
+                      }
+                      className="h-7 px-2.5 text-xs cursor-pointer bg-primary text-primary-foreground font-medium"
+                    >
+                      <span>Use Template</span>
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

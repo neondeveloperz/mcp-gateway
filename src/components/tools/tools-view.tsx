@@ -158,7 +158,8 @@ export function ToolsView() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
-            onClick={() => handleOpenRunner(tools[0])}
+            onClick={() => tools.length > 0 && handleOpenRunner(tools[0])}
+            disabled={tools.length === 0}
             className="cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium text-xs h-8"
           >
             <PlayIcon className="size-3.5" />
@@ -246,8 +247,14 @@ export function ToolsView() {
               <TableBody>
                 {filteredTools.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center text-xs text-muted-foreground">
-                      No tools found matching current filter.
+                    <TableCell colSpan={7} className="py-16 text-center text-xs text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <WrenchIcon className="size-8 text-muted-foreground/60" />
+                        <span className="font-semibold text-foreground text-sm">No Tools Available</span>
+                        <p className="text-xs text-muted-foreground max-w-sm">
+                          Tools will appear here once you add and connect MCP servers in &quot;MCP Servers&quot;.
+                        </p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (

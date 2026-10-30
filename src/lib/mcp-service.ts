@@ -37,90 +37,8 @@ export interface RpcLog {
   responsePayload?: string
 }
 
-const SERVERS_STORAGE_KEY = "mcp_gateway_servers_v2"
+const SERVERS_STORAGE_KEY = "mcp_gateway_user_servers_v3"
 const RPC_LOGS_STORAGE_KEY = "mcp_gateway_rpc_logs_v2"
-
-// Real servers discovered from user's system (~/.cursor/mcp.json, ~/.gemini/config/mcp_config.json)
-const realSeedServers: McpServer[] = [
-  {
-    id: "srv-9remote",
-    name: "9remote",
-    transport: "http",
-    command: "",
-    args: [],
-    url: "http://127.0.0.1:2208/mcp",
-    source: "Cursor (~/.cursor/mcp.json)",
-    status: "online",
-    latencyMs: 3,
-    toolsCount: 6,
-    resourcesCount: 2,
-  },
-  {
-    id: "srv-rea",
-    name: "rea",
-    transport: "stdio",
-    command: "npx",
-    args: ["-y", "rea-agents@6.8.0", "mcp"],
-    url: "",
-    source: "Antigravity (~/.gemini/config/mcp_config.json)",
-    status: "online",
-    latencyMs: 12,
-    toolsCount: 142,
-    resourcesCount: 8,
-  },
-  {
-    id: "srv-sqlite",
-    name: "sqlite",
-    transport: "stdio",
-    command: "npx",
-    args: ["-y", "@database-mcp/sqlite"],
-    url: "",
-    source: "Antigravity (~/.gemini/config/mcp_config.json)",
-    status: "online",
-    latencyMs: 5,
-    toolsCount: 8,
-    resourcesCount: 2,
-  },
-  {
-    id: "srv-docker",
-    name: "docker",
-    transport: "stdio",
-    command: "npx",
-    args: ["-y", "@thelord/mcp-server-docker-npx"],
-    url: "",
-    source: "Antigravity (~/.gemini/config/mcp_config.json)",
-    status: "standby",
-    latencyMs: 0,
-    toolsCount: 12,
-    resourcesCount: 1,
-  },
-  {
-    id: "srv-postgres",
-    name: "postgres",
-    transport: "stdio",
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-postgres", "postgresql://postgres:postgres@localhost:5432/postgres"],
-    url: "",
-    source: "Antigravity (~/.gemini/config/mcp_config.json)",
-    status: "standby",
-    latencyMs: 0,
-    toolsCount: 5,
-    resourcesCount: 1,
-  },
-  {
-    id: "srv-global-gateway",
-    name: "global-gateway",
-    transport: "sse",
-    command: "",
-    args: [],
-    url: "http://localhost:4444/sse",
-    source: "Antigravity (~/.gemini/config/mcp_config.json)",
-    status: "standby",
-    latencyMs: 0,
-    toolsCount: 4,
-    resourcesCount: 1,
-  },
-]
 
 export async function fetchSystemInfo(): Promise<SystemInfo> {
   if (isTauri()) {
@@ -140,59 +58,14 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   }
 }
 
+// User-managed servers (No automatic machine scanning; configured manually by user)
 export async function fetchDiscoveredServers(): Promise<McpServer[]> {
-  // If in Tauri, scan the filesystem directly first
-  if (isTauri()) {
-    try {
-      const discovered = await invoke<
-        Array<{
-          id: string
-          name: string
-          transport: "stdio" | "sse" | "http"
-          command: string
-          args: string[]
-          url: string
-          source: string
-          status: string
-          latency_ms: number
-        }>
-      >("discover_mcp_servers")
-
-      if (discovered && discovered.length > 0) {
-        // Query real tools from filesystem
-        const tools = await fetchDiscoveredTools().catch(() => [])
-
-        const mapped: McpServer[] = discovered.map((d) => {
-          const srvToolsCount = tools.filter((t) => t.server === d.name).length
-          return {
-            id: d.id,
-            name: d.name,
-            transport: d.transport,
-            command: d.command,
-            args: d.args,
-            url: d.url,
-            source: d.source,
-            status: (d.status === "online" ? "online" : "standby") as McpServer["status"],
-            latencyMs: d.latency_ms || (d.transport === "http" || d.transport === "sse" ? 3 : 6),
-            toolsCount: srvToolsCount > 0 ? srvToolsCount : d.name === "rea" ? 142 : 6,
-            resourcesCount: 2,
-          }
-        })
-        saveServers(mapped)
-        return mapped
-      }
-    } catch {
-      // Fallback to saved
-    }
-  }
-
-  // Check localStorage if not in Tauri or if discovery returned empty
   if (typeof window !== "undefined") {
     try {
       const saved = localStorage.getItem(SERVERS_STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed
         }
       }
@@ -200,10 +73,7 @@ export async function fetchDiscoveredServers(): Promise<McpServer[]> {
       // ignore
     }
   }
-
-  // Save seed to localStorage
-  saveServers(realSeedServers)
-  return realSeedServers
+  return []
 }
 
 export function saveServers(servers: McpServer[]) {
@@ -822,67 +692,47 @@ const realPromptsCatalog: McpPrompt[] = [
 ]
 
 export async function fetchDiscoveredTools(): Promise<McpTool[]> {
-  if (isTauri()) {
+  // Only return tools for servers that user has explicitly configured
+  const servers = await fetchDiscoveredServers()
+  if (servers.length === 0) {
+    return []
+  }
+
+  const serverNames = new Set(servers.map((s) => s.name))
+
+  // User-defined tools in storage
+  let userTools: McpTool[] = []
+  if (typeof window !== "undefined") {
     try {
-      const nativeTools = await invoke<
-        Array<{
-          name: string
-          server: string
-          description: string
-          parameters: Record<string, unknown>
-          category: string
-        }>
-      >("get_system_mcp_tools")
-
-      if (nativeTools && nativeTools.length > 0) {
-        return nativeTools.map((t, idx) => {
-          const rawParams = (t.parameters || {}) as {
-            properties?: Record<string, { type?: string; description?: string }>
-            required?: string[]
-          }
-          const props = rawParams.properties || {}
-          const req = rawParams.required || []
-          const paramsMap: Record<string, { type: string; description: string; required?: boolean }> = {}
-
-          Object.entries(props).forEach(([k, v]) => {
-            paramsMap[k] = {
-              type: v.type || "string",
-              description: v.description || "",
-              required: req.includes(k),
-            }
-          })
-
-          const isRisky =
-            t.name.includes("frida") ||
-            t.name.includes("drop") ||
-            t.name.includes("write") ||
-            t.name.includes("exec") ||
-            t.name.includes("delete")
-
-          return {
-            id: `sys-tool-${idx}-${t.name}`,
-            name: t.name,
-            server: t.server,
-            description: t.description || `Native tool from ${t.server}`,
-            parameters: paramsMap,
-            riskLevel: isRisky ? ("high" as const) : ("low" as const),
-            category: t.category,
-          }
-        })
+      const saved = localStorage.getItem("mcp_gateway_user_tools_v2")
+      if (saved) {
+        userTools = JSON.parse(saved)
       }
     } catch {
-      // Fallback
+      // ignore
     }
   }
-  return realToolsCatalog
+
+  // Pre-configured tool definitions matching the user's servers
+  const matchingSeedTools = realToolsCatalog.filter((t) => serverNames.has(t.server))
+  const combined = [...userTools.filter((t) => serverNames.has(t.server)), ...matchingSeedTools]
+  return combined
 }
 
 export function fetchDiscoveredResources(): McpResource[] {
-  return realResourcesCatalog
+  const servers: McpServer[] =
+    typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
+  if (servers.length === 0) return []
+  const serverNames = new Set(servers.map((s) => s.name))
+  return realResourcesCatalog.filter((r) => serverNames.has(r.server))
 }
 
 export function fetchDiscoveredPrompts(): McpPrompt[] {
-  return realPromptsCatalog
+  const servers: McpServer[] =
+    typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
+  if (servers.length === 0) return []
+  const serverNames = new Set(servers.map((s) => s.name))
+  return realPromptsCatalog.filter((p) => serverNames.has(p.server))
 }
 
 export async function executeMcpTool(
@@ -967,6 +817,7 @@ export function addCustomServer(newServer: {
   args: string[]
   url: string
 }): McpServer {
+  const matchingTools = realToolsCatalog.filter((t) => t.server === newServer.name)
   const server: McpServer = {
     id: `srv-${Date.now()}`,
     name: newServer.name,
@@ -974,11 +825,11 @@ export function addCustomServer(newServer: {
     command: newServer.command,
     args: newServer.args,
     url: newServer.url,
-    source: "Custom Server",
+    source: "Manual (Gateway Config)",
     status: "online",
-    latencyMs: 6,
-    toolsCount: 4,
-    resourcesCount: 1,
+    latencyMs: 4,
+    toolsCount: matchingTools.length > 0 ? matchingTools.length : 0,
+    resourcesCount: 0,
   }
   const current = typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
   const updated = [server, ...current]

@@ -219,7 +219,7 @@ export function ServersView() {
                 {onlineCount} of {servers.length} Servers Active
               </Badge>
               <Badge variant="outline" className="font-mono text-xs text-muted-foreground">
-                Auto-Discovered & Configured
+                Manual Configuration Only
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -384,8 +384,22 @@ export function ServersView() {
               <TableBody>
                 {filteredServers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center text-xs text-muted-foreground">
-                      No MCP servers match the current filter.
+                    <TableCell colSpan={7} className="py-16 text-center text-xs text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <ServerIcon className="size-8 text-muted-foreground/60" />
+                        <span className="font-semibold text-foreground text-sm">No MCP Servers Configured</span>
+                        <p className="text-xs text-muted-foreground max-w-sm">
+                          No servers are automatically loaded from the host. Click &quot;Add MCP Server&quot; to configure your own Stdio or SSE servers manually.
+                        </p>
+                        <Button
+                          size="sm"
+                          onClick={() => setIsAddOpen(true)}
+                          className="mt-2 h-8 text-xs cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium"
+                        >
+                          <PlusIcon className="size-3.5" />
+                          <span>Add MCP Server</span>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
