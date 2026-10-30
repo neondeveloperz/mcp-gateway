@@ -10,6 +10,8 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { PlusCircleIcon, ActivityIcon } from "lucide-react"
+import { MenuBadge, type BadgeVariant } from "@/components/nav-badge"
+import { cn } from "@/lib/utils"
 
 export interface NavMainItem {
   id: string
@@ -17,6 +19,7 @@ export interface NavMainItem {
   url?: string
   icon?: React.ReactNode
   badge?: string | number
+  badgeVariant?: BadgeVariant
   isActive?: boolean
 }
 
@@ -66,13 +69,15 @@ export function NavMain({
                   tooltip={item.title}
                   isActive={isCurrentActive}
                   onClick={() => onSelectItem?.(item.id)}
-                  className="cursor-pointer"
+                  className={cn("cursor-pointer", item.badge != null && "pr-20")}
                 >
                   {item.icon}
                   <span>{item.title}</span>
                 </SidebarMenuButton>
                 {item.badge != null && (
-                  <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
+                  <SidebarMenuBadge className="right-2 h-auto pointer-events-none">
+                    <MenuBadge badge={item.badge} variant={item.badgeVariant} />
+                  </SidebarMenuBadge>
                 )}
               </SidebarMenuItem>
             )
