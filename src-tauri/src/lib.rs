@@ -567,7 +567,7 @@ fn handle_gateway_client(mut stream: TcpStream) {
         return;
     }
 
-    if method == "GET" && path.starts_with("/sse") {
+    if method == "GET" && (path.starts_with("/sse") || path.starts_with("/mcp")) {
         let session_id = format!("sess-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
         let headers = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
         let _ = stream.write_all(headers.as_bytes());
@@ -587,12 +587,23 @@ fn handle_gateway_client(mut stream: TcpStream) {
         return;
     }
 
-    if method == "POST" && (path.starts_with("/messages") || path == "/mcp" || path == "/") {
+    if method == "POST" && (path.starts_with("/messages") || path.starts_with("/mcp") || path == "/") {
         let mut body = vec![0u8; content_length];
         if content_length > 0 {
             let _ = reader.read_exact(&mut body);
         }
         let body_str = String::from_utf8_lossy(&body).to_string();
+
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body_str) {
+            let is_notification = val.get("id").is_none()
+                || val.get("method").and_then(|m| m.as_str()).map(|m| m.starts_with("notifications/")).unwrap_or(false);
+            if is_notification {
+                let response = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+                return;
+            }
+        }
 
         let rpc_result = handle_json_rpc(&body_str);
         let json_res = serde_json::to_string(&rpc_result).unwrap_or_else(|_| "{}".to_string());
@@ -637,6 +648,9 @@ pub fn run() {
         .setup(|_app| {
             std::thread::spawn(|| {
                 start_embedded_gateway(8080);
+            });
+            std::thread::spawn(|| {
+                start_embedded_gateway(4444);
             });
             Ok(())
         })

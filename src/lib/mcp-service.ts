@@ -399,11 +399,17 @@ async function fetchRemoteTools(server: McpServer): Promise<McpTool[]> {
 
     let json: McpToolsListResponse | null = null
 
+    const effectiveToken =
+      server.authToken ||
+      server.headers?.["Authorization"] ||
+      server.headers?.["authorization"] ||
+      null
+
     if (isTauri()) {
       try {
         const raw = await invoke<string>("execute_remote_mcp", {
           url: server.url,
-          authToken: server.authToken || null,
+          authToken: effectiveToken,
           payload,
         })
         json = JSON.parse(raw)
@@ -540,11 +546,17 @@ export async function executeMcpTool(
 
     let json: { result?: unknown; error?: unknown } | null = null
 
+    const effectiveToken =
+      server.authToken ||
+      server.headers?.["Authorization"] ||
+      server.headers?.["authorization"] ||
+      null
+
     if (isTauri()) {
       try {
         const raw = await invoke<string>("execute_remote_mcp", {
           url: server.url,
-          authToken: server.authToken || null,
+          authToken: effectiveToken,
           payload,
         })
         json = JSON.parse(raw)
