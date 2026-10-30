@@ -3,7 +3,16 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 pub fn home_dir() -> Option<PathBuf> {
-    std::env::var("HOME").ok().map(PathBuf::from)
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        return Some(PathBuf::from(profile));
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        return Some(PathBuf::from(home));
+    }
+    if let (Ok(drive), Ok(path)) = (std::env::var("HOMEDRIVE"), std::env::var("HOMEPATH")) {
+        return Some(PathBuf::from(format!("{}{}", drive, path)));
+    }
+    None
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -103,4 +112,3 @@ pub fn save_gateway_servers(servers_json: String) -> Result<(), String> {
     }
     Ok(())
 }
-

@@ -29,7 +29,7 @@ export function HelpView() {
 
     const sanitizedBundle = {
       app: "MCP Gateway Desktop Core",
-      version: "0.1.0",
+      version: "0.1.1",
       generatedAt: new Date().toISOString(),
       system: {
         os: sys.os,
@@ -218,7 +218,7 @@ export function HelpView() {
         </CardContent>
         <CardFooter className="border-t border-border/40 text-xs text-muted-foreground flex items-center justify-between">
           <span>Diagnostics bundle does not contain private keys or bearer tokens</span>
-          <span>Version: 0.1.0-alpha</span>
+          <span>Version: 0.1.1</span>
         </CardFooter>
       </Card>
     </div>

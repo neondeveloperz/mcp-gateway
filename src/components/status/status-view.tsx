@@ -157,9 +157,9 @@ export function StatusView() {
             </Badge>
           </div>
           <p className="text-base font-bold tracking-tight font-mono text-foreground">
-            {sysInfo ? `${sysInfo.os} (${sysInfo.arch})` : "darwin-aarch64"}
+            {sysInfo ? `${sysInfo.os} (${sysInfo.arch})` : "detecting..."}
           </p>
-          <p className="text-[11px] text-muted-foreground">Apple Silicon Native (Tauri v2 Core)</p>
+          <p className="text-[11px] text-muted-foreground">{sysInfo ? `${sysInfo.os} Native (Tauri v2 Core)` : "Tauri v2 Core"}</p>
         </div>
 
         <div className="rounded-lg border bg-card/40 p-3.5 space-y-1.5">

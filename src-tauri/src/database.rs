@@ -51,11 +51,20 @@ pub fn save_configured_databases(dbs: &[DatabaseConfig]) -> Result<(), String> {
 
 pub fn clean_sqlite_path(uri: &str) -> String {
     let s = uri.trim();
-    if let Some(stripped) = s.strip_prefix("sqlite://") {
-        stripped.to_string()
+    let mut stripped = if let Some(rest) = s.strip_prefix("sqlite://") {
+        rest
     } else {
-        s.to_string()
+        s
+    };
+
+    #[cfg(windows)]
+    {
+        if stripped.starts_with('/') && stripped.len() > 2 && stripped.as_bytes()[2] == b':' {
+            stripped = &stripped[1..];
+        }
     }
+
+    stripped.to_string()
 }
 
 pub fn detect_engine_from_uri(uri: &str) -> String {

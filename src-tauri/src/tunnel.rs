@@ -30,25 +30,67 @@ pub static TUNNEL_MODE: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new("quick".to_string()));
 
 pub fn find_cloudflared_binary() -> Option<PathBuf> {
-    let candidates = [
-        "/opt/homebrew/bin/cloudflared",
-        "/usr/local/bin/cloudflared",
-        "/usr/bin/cloudflared",
-    ];
-    for path in &candidates {
-        let p = PathBuf::from(path);
-        if p.exists() {
-            return Some(p);
+    #[cfg(windows)]
+    {
+        let mut candidates = Vec::new();
+        if let Ok(pf86) = std::env::var("ProgramFiles(x86)") {
+            candidates.push(PathBuf::from(pf86).join("cloudflared").join("cloudflared.exe"));
         }
-    }
-    if let Ok(output) = Command::new("which").arg("cloudflared").output() {
-        if output.status.success() {
-            let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !s.is_empty() {
-                return Some(PathBuf::from(s));
+        if let Ok(pf) = std::env::var("ProgramFiles") {
+            candidates.push(PathBuf::from(pf).join("cloudflared").join("cloudflared.exe"));
+        }
+        if let Ok(pd) = std::env::var("ProgramData") {
+            candidates.push(PathBuf::from(pd).join("chocolatey").join("bin").join("cloudflared.exe"));
+        }
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            candidates.push(PathBuf::from(&local_app_data).join("bin").join("cloudflared.exe"));
+            candidates.push(PathBuf::from(&local_app_data).join("cloudflared").join("cloudflared.exe"));
+        }
+
+        for p in candidates {
+            if p.exists() {
+                return Some(p);
+            }
+        }
+
+        if let Ok(output) = Command::new("where").arg("cloudflared").output() {
+            if output.status.success() {
+                if let Some(first_line) = String::from_utf8_lossy(&output.stdout).lines().next() {
+                    let trimmed = first_line.trim();
+                    if !trimmed.is_empty() {
+                        let p = PathBuf::from(trimmed);
+                        if p.exists() {
+                            return Some(p);
+                        }
+                    }
+                }
             }
         }
     }
+
+    #[cfg(not(windows))]
+    {
+        let candidates = [
+            "/opt/homebrew/bin/cloudflared",
+            "/usr/local/bin/cloudflared",
+            "/usr/bin/cloudflared",
+        ];
+        for path in &candidates {
+            let p = PathBuf::from(path);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        if let Ok(output) = Command::new("which").arg("cloudflared").output() {
+            if output.status.success() {
+                let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !s.is_empty() {
+                    return Some(PathBuf::from(s));
+                }
+            }
+        }
+    }
+
     None
 }
 

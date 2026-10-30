@@ -19,7 +19,8 @@ pub fn get_system_info() -> SystemRuntimeInfo {
     let start_time = APP_START.get_or_init(Instant::now);
     let uptime = start_time.elapsed().as_secs();
 
-    let hostname = std::env::var("HOSTNAME")
+    let hostname = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
         .or_else(|_| std::env::var("HOST"))
         .unwrap_or_else(|_| {
             let output = Command::new("hostname").output();
@@ -47,7 +48,7 @@ pub fn discover_mcp_servers() -> Vec<DiscoveredMcpServer> {
         return Vec::new();
     };
 
-    let config_paths = vec![
+    let mut config_paths = vec![
         (
             home.join(".cursor").join("mcp.json"),
             "Cursor (~/.cursor/mcp.json)",
@@ -72,7 +73,15 @@ pub fn discover_mcp_servers() -> Vec<DiscoveredMcpServer> {
             home.join(".mcp-gateway").join("servers.json"),
             "MCP Gateway (~/.mcp-gateway/servers.json)",
         ),
+        (
+            home.join(".mcp_gateway").join("servers.json"),
+            "MCP Gateway (~/.mcp_gateway/servers.json)",
+        ),
     ];
+
+    if let Some(claude_path) = crate::ide::get_ide_config_path("claude", &home) {
+        config_paths.push((claude_path, "Claude Desktop"));
+    }
 
     for (path, source_label) in config_paths {
         if !path.exists() {
@@ -185,12 +194,18 @@ pub fn ping_mcp_server(target: &str, transport: &str) -> PingResult {
         }
     } else {
         let exec_cmd = target.split_whitespace().next().unwrap_or(target);
-        let out = Command::new("which").arg(exec_cmd).output();
+        let which_cmd = if cfg!(windows) { "where" } else { "which" };
+        let out = Command::new(which_cmd).arg(exec_cmd).output();
         let elapsed = start.elapsed().as_millis() as u64;
 
         match out {
             Ok(output) if output.status.success() => {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let path = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
                 PingResult {
                     success: true,
                     latency_ms: elapsed.max(1),

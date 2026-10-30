@@ -234,7 +234,7 @@ console.log("Connected to MCP Gateway tools:", tools);`
             <TabsContent value="claude" className="space-y-3 pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
-                  Paste into <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>:
+                  Paste into <code>claude_desktop_config.json</code> (macOS: <code>~/Library/Application Support/Claude/</code> | Windows: <code>%APPDATA%\Claude\</code>):
                 </span>
                 <Button
                   size="sm"

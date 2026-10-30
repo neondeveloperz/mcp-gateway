@@ -70,11 +70,12 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
     }
   }
 
+  const isWin = typeof navigator !== "undefined" && (navigator.platform?.includes("Win") || navigator.userAgent?.includes("Windows"))
   return {
     pid: 34821,
-    os: "darwin",
-    arch: "aarch64",
-    hostname: "mac.local",
+    os: isWin ? "windows" : "darwin",
+    arch: "x86_64",
+    hostname: isWin ? "localhost" : "mac.local",
     uptimeSecs: Math.floor((performance.now() + 15200000) / 1000),
   }
 }
@@ -1123,7 +1124,7 @@ export async function fetchIdeStatuses(): Promise<IdeStatus[]> {
   return [
     { ide: "cursor", name: "Cursor", path: "~/.cursor/mcp.json", exists: true, configured: true, mcpName: "mcp-gateway" },
     { ide: "antigravity", name: "Google Antigravity", path: "~/.gemini/config/mcp_config.json", exists: true, configured: true, mcpName: "mcp-gateway" },
-    { ide: "claude", name: "Claude Desktop", path: "~/Library/Application Support/Claude/claude_desktop_config.json", exists: false, configured: false, mcpName: "mcp-gateway" },
+    { ide: "claude", name: "Claude Desktop", path: "%APPDATA%/Claude/claude_desktop_config.json", exists: false, configured: false, mcpName: "mcp-gateway" },
     { ide: "vscode", name: "VS Code (Cline / Roo)", path: "~/.vscode/mcp.json", exists: false, configured: false, mcpName: "mcp-gateway" },
   ]
 }
