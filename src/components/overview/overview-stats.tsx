@@ -52,7 +52,7 @@ export function OverviewStats({
   const totalCalls = logs.length
   const avgLatency =
     logs.length > 0
-      ? Math.round(logs.reduce((acc, l) => acc + l.latencyMs, 0) / logs.length)
+      ? Math.round(logs.reduce((acc, l) => acc + (Number(l.latencyMs) || 0), 0) / logs.length)
       : 8
 
   const activeTokensCount = React.useMemo(() => {
@@ -120,12 +120,12 @@ export function OverviewStats({
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 min-w-0">
       {stats.map((stat) => (
         <Card
           key={stat.title}
           onClick={stat.onClick}
-          className="group cursor-pointer transition-all duration-200 hover:border-primary/40 hover:shadow-md"
+          className="group cursor-pointer transition-all duration-200 hover:border-primary/40 hover:shadow-md min-w-0"
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardDescription className="flex items-center gap-1.5 font-medium text-xs">

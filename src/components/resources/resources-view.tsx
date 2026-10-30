@@ -35,8 +35,11 @@ import {
   EyeIcon,
   FileCodeIcon,
   SparklesIcon,
+  RotateCwIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { TablePagination } from "@/components/ui/table-pagination"
+import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
 import {
   fetchDiscoveredResources,
   fetchDiscoveredPrompts,
@@ -56,6 +59,13 @@ export function ResourcesView() {
   const [selectedServer, setSelectedServer] = React.useState<string>("all")
   const [activeResource, setActiveResource] = React.useState<McpResource | null>(null)
   const [isResourceOpen, setIsResourceOpen] = React.useState(false)
+
+  // Sorting & Pagination
+  type ResourceSortKey = "uri" | "name" | "server" | "mimeType"
+  const [sortKey, setSortKey] = React.useState<ResourceSortKey | null>("name")
+  const [sortOrder, setSortOrder] = React.useState<SortOrder>("asc")
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(10)
 
   const loadData = React.useCallback(async () => {
     const srvs = await fetchDiscoveredServers()
@@ -84,6 +94,47 @@ export function ResourcesView() {
     const matchServer = selectedServer === "all" || res.server === selectedServer
     return matchSearch && matchServer
   })
+
+  const handleSort = (column: ResourceSortKey) => {
+    if (sortKey === column) {
+      if (sortOrder === "asc") setSortOrder("desc")
+      else if (sortOrder === "desc") {
+        setSortKey(null)
+        setSortOrder(null)
+      }
+    } else {
+      setSortKey(column)
+      setSortOrder("asc")
+    }
+    setCurrentPage(1)
+  }
+
+  const sortedResources = React.useMemo(() => {
+    if (!sortKey || !sortOrder) return filteredResources
+    return [...filteredResources].sort((a, b) => {
+      let comparison = 0
+      switch (sortKey) {
+        case "uri":
+          comparison = a.uri.localeCompare(b.uri)
+          break
+        case "name":
+          comparison = a.name.localeCompare(b.name)
+          break
+        case "server":
+          comparison = a.server.localeCompare(b.server)
+          break
+        case "mimeType":
+          comparison = (a.mimeType || "").localeCompare(b.mimeType || "")
+          break
+      }
+      return sortOrder === "asc" ? comparison : -comparison
+    })
+  }, [filteredResources, sortKey, sortOrder])
+
+  const paginatedResources = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return sortedResources.slice(start, start + pageSize)
+  }, [sortedResources, currentPage, pageSize])
 
   const filteredPrompts = prompts.filter((p) => {
     const matchSearch =
@@ -115,7 +166,7 @@ export function ResourcesView() {
   }
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       {/* Top Banner */}
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
@@ -161,6 +212,17 @@ export function ResourcesView() {
               </option>
             ))}
           </select>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadData}
+            className="h-8 gap-1.5 text-xs cursor-pointer px-2 sm:px-3"
+            title="Refresh Resources"
+          >
+            <RotateCwIcon className="size-3.5" />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
         </div>
       </div>
 
@@ -196,16 +258,32 @@ export function ResourcesView() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-t hover:bg-transparent">
-                      <TableHead className="w-60 text-xs font-semibold">Resource URI</TableHead>
-                      <TableHead className="w-48 text-xs font-semibold">Name</TableHead>
-                      <TableHead className="w-28 text-xs font-semibold">Server</TableHead>
-                      <TableHead className="w-32 text-xs font-semibold">MIME Type</TableHead>
+                      <TableHead className="w-60 text-xs font-semibold">
+                        <TableSortHeader column="uri" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                          Resource URI
+                        </TableSortHeader>
+                      </TableHead>
+                      <TableHead className="w-48 text-xs font-semibold">
+                        <TableSortHeader column="name" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                          Name
+                        </TableSortHeader>
+                      </TableHead>
+                      <TableHead className="w-28 text-xs font-semibold">
+                        <TableSortHeader column="server" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                          Server
+                        </TableSortHeader>
+                      </TableHead>
+                      <TableHead className="w-32 text-xs font-semibold">
+                        <TableSortHeader column="mimeType" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                          MIME Type
+                        </TableSortHeader>
+                      </TableHead>
                       <TableHead className="text-xs font-semibold">Description</TableHead>
                       <TableHead className="w-24 text-right text-xs font-semibold">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredResources.length === 0 ? (
+                    {sortedResources.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="py-16 text-center text-xs text-muted-foreground">
                           <div className="flex flex-col items-center justify-center gap-2">
@@ -218,7 +296,7 @@ export function ResourcesView() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredResources.map((res) => (
+                      paginatedResources.map((res) => (
                         <TableRow key={res.id} className="hover:bg-muted/30 transition-colors">
                           <TableCell className="font-mono text-xs font-semibold text-primary">
                             <span className="flex items-center gap-1.5">
@@ -260,6 +338,15 @@ export function ResourcesView() {
                   </TableBody>
                 </Table>
               </div>
+
+              <TablePagination
+                currentPage={currentPage}
+                pageSize={pageSize}
+                totalItems={sortedResources.length}
+                pageSizeOptions={[5, 10, 20, 50]}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
             </CardContent>
             <CardFooter className="flex items-center justify-between border-t border-border/40 text-xs text-muted-foreground">
               <span>Read access verified via MCP resources/read</span>

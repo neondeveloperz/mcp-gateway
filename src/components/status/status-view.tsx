@@ -53,10 +53,23 @@ export function StatusView() {
     loadData()
   }, [loadData])
 
-  const formatUptime = (secs: number) => {
-    const hours = Math.floor(secs / 3600)
+  // Live real-time uptime ticker
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setSysInfo((prev) => (prev ? { ...prev, uptimeSecs: (prev.uptimeSecs || 0) + 1 } : prev))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const formatUptime = (rawSecs: number | undefined | null) => {
+    const secs = Math.max(0, Math.floor(Number(rawSecs) || 0))
+    const days = Math.floor(secs / 86400)
+    const hours = Math.floor((secs % 86400) / 3600)
     const mins = Math.floor((secs % 3600) / 60)
     const remainingSecs = secs % 60
+    if (days > 0) {
+      return `${days}d ${hours}h ${mins}m ${remainingSecs}s`
+    }
     return `${hours}h ${mins}m ${remainingSecs}s`
   }
 
@@ -84,7 +97,7 @@ export function StatusView() {
   const healthyServersCount = servers.filter((s) => s.status === "online").length
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       {/* Top Banner */}
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
@@ -107,15 +120,16 @@ export function StatusView() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <Button
             size="sm"
             onClick={handleRunFullProbe}
             disabled={isProbing}
-            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium text-xs h-8"
+            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium text-xs h-8 px-2 sm:px-3"
+            title="Run Health Probe"
           >
             <RotateCwIcon className={`size-3.5 ${isProbing ? "animate-spin" : ""}`} />
-            <span>{isProbing ? "Probing Servers..." : "Run Health Probe"}</span>
+            <span className="hidden sm:inline">{isProbing ? "Probing Servers..." : "Run Health Probe"}</span>
           </Button>
 
           <Button

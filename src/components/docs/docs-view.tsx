@@ -115,7 +115,7 @@ console.log("Connected to MCP Gateway tools:", tools);`
   }'`
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       {/* Top Banner */}
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
@@ -191,7 +191,7 @@ console.log("Connected to MCP Gateway tools:", tools);`
         </CardHeader>
         <CardContent className="space-y-4">
           <Tabs defaultValue="cursor" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-9">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1 gap-1">
               <TabsTrigger value="cursor" className="cursor-pointer text-xs">
                 Cursor
               </TabsTrigger>

@@ -57,7 +57,14 @@ if (typeof window !== "undefined") {
 export async function fetchSystemInfo(): Promise<SystemInfo> {
   if (isTauri()) {
     try {
-      return await invoke<SystemInfo>("get_system_info")
+      const raw = await invoke<Record<string, unknown>>("get_system_info")
+      return {
+        pid: typeof raw.pid === "number" ? raw.pid : 34821,
+        os: typeof raw.os === "string" ? raw.os : "darwin",
+        arch: typeof raw.arch === "string" ? raw.arch : "aarch64",
+        hostname: typeof raw.hostname === "string" ? raw.hostname : "mac.local",
+        uptimeSecs: Number(raw.uptimeSecs ?? raw.uptime_secs ?? 0),
+      }
     } catch {
       // Fallback
     }
@@ -72,8 +79,22 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   }
 }
 
-// User-managed servers (Manual configuration only, persists in localStorage)
+// User-managed servers (Manual configuration only, persists in localStorage and ~/.mcp_gateway/servers.json)
 export async function fetchDiscoveredServers(): Promise<McpServer[]> {
+  if (isTauri()) {
+    try {
+      const nativeServers = await invoke<McpServer[]>("load_gateway_servers")
+      if (Array.isArray(nativeServers) && nativeServers.length > 0) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(SERVERS_STORAGE_KEY, JSON.stringify(nativeServers))
+        }
+        return nativeServers
+      }
+    } catch {
+      // Fallback to localStorage
+    }
+  }
+
   if (typeof window !== "undefined") {
     try {
       const saved = localStorage.getItem(SERVERS_STORAGE_KEY)
@@ -132,15 +153,16 @@ export async function pingServer(server: McpServer): Promise<{ success: boolean;
 
   if (isTauri()) {
     try {
-      const res = await invoke<{ success: boolean; latency_ms: number; message: string }>("ping_mcp_server", {
+      const res = await invoke<{ success: boolean; latencyMs?: number; latency_ms?: number; message: string }>("ping_mcp_server", {
         target,
         transport: server.transport,
       })
+      const latency = Number(res.latencyMs ?? res.latency_ms ?? Math.max(1, Math.round(performance.now() - started)))
       logRpcCall({
         method: "ping",
         server: server.name,
         target,
-        latencyMs: res.latency_ms,
+        latencyMs: latency,
         status: res.success ? "success" : "error",
         details: res.message,
         clientIp: "127.0.0.1",
@@ -159,13 +181,13 @@ export async function pingServer(server: McpServer): Promise<{ success: boolean;
           {
             jsonrpc: "2.0",
             id: `ping-${Date.now()}`,
-            result: { success: res.success, latencyMs: res.latency_ms, message: res.message },
+            result: { success: res.success, latencyMs: latency, message: res.message },
           },
           null,
           2
         ),
       })
-      return { success: res.success, latencyMs: res.latency_ms, message: res.message }
+      return { success: res.success, latencyMs: latency, message: res.message }
     } catch {
       // Fallback to fetch
     }
@@ -289,7 +311,10 @@ export function getRpcLogs(): RpcLog[] {
       if (saved) {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed)) {
-          return parsed
+          return parsed.map((l) => ({
+            ...l,
+            latencyMs: typeof l.latencyMs === "number" && !isNaN(l.latencyMs) ? l.latencyMs : (Number(l.latencyMs) || 0),
+          }))
         }
       }
     } catch {
@@ -311,11 +336,30 @@ export function clearRpcLogs() {
   }
 }
 
+export function redactSecrets(text: string): string {
+  if (!text) return text
+  // Redact Bearer tokens
+  let res = text.replace(/Bearer\s+([A-Za-z0-9_|\-.]{8,})/gi, "Bearer [REDACTED_TOKEN]")
+  // Redact JSON/URL fields for passwords, tokens, API keys
+  res = res.replace(/("?(?:password|token|authToken|auth_token|apiKey|api_key|secret|client_secret)"?\s*:\s*")([^"]+)(")/gi, '$1[REDACTED_SECRET]$3')
+  // Redact Private keys
+  res = res.replace(/-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]")
+  return res
+}
+
 export function logRpcCall(entry: Omit<RpcLog, "id" | "time">): RpcLog {
+  const sanitizedRequest = entry.requestPayload ? redactSecrets(entry.requestPayload) : undefined
+  const sanitizedResponse = entry.responsePayload ? redactSecrets(entry.responsePayload) : undefined
+  const sanitizedDetails = entry.details ? redactSecrets(entry.details) : undefined
+
   const newLog: RpcLog = {
     id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     time: new Date().toLocaleTimeString("en-US", { hour12: false }),
     ...entry,
+    latencyMs: typeof entry.latencyMs === "number" && !isNaN(entry.latencyMs) ? entry.latencyMs : (Number(entry.latencyMs) || 0),
+    requestPayload: sanitizedRequest,
+    responsePayload: sanitizedResponse,
+    details: sanitizedDetails,
   }
   const current = getRpcLogs()
   const updated = [newLog, ...current].slice(0, 100)
@@ -455,6 +499,47 @@ export async function fetchDiscoveredTools(): Promise<McpTool[]> {
   const servers = await fetchDiscoveredServers()
   if (servers.length === 0) {
     return []
+  }
+
+  // 1. Try querying local Gateway Core HTTP endpoint (which already aggregates and namespaces)
+  try {
+    const res = await fetch("http://127.0.0.1:8080/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: `tools-${Date.now()}`, method: "tools/list", params: {} }),
+    })
+    if (res.ok) {
+      const json = await res.json()
+      if (json?.result?.tools && Array.isArray(json.result.tools) && json.result.tools.length > 0) {
+        return json.result.tools.map((t: { name: string; description?: string; _meta?: { server?: string; originalName?: string; isNamespaced?: boolean }; inputSchema?: { properties?: Record<string, { type?: string; description?: string }>; required?: string[] }; annotations?: { destructiveHint?: boolean; readOnlyHint?: boolean } }, idx: number) => {
+          const srvName = t._meta?.server || (t.name.startsWith("easypanel_") ? "Easypanel" : "Coolify")
+          return {
+            id: `tool-${srvName}-${idx + 1}`,
+            name: t.name,
+            server: srvName,
+            description: t.description || "",
+            parameters: Object.fromEntries(
+              Object.entries(t.inputSchema?.properties || {}).map(([k, v]) => [
+                k,
+                {
+                  type: v.type || "string",
+                  description: v.description || "",
+                  required: t.inputSchema?.required?.includes(k) || false,
+                },
+              ])
+            ),
+            riskLevel: t.annotations?.destructiveHint
+              ? "critical"
+              : t.annotations?.readOnlyHint
+                ? "low"
+                : "medium",
+            category: "Cloud & Infrastructure",
+          }
+        })
+      }
+    }
+  } catch {
+    // fallback
   }
 
   const serverNames = new Set(servers.map((s) => s.name))
@@ -723,6 +808,49 @@ export async function readRemoteResource(resource: McpResource): Promise<McpReso
 }
 
 export async function fetchDiscoveredResources(): Promise<McpResource[]> {
+  if (isTauri()) {
+    try {
+      const nativeRes = await invoke<Array<{ uri?: string; name?: string; title?: string; mimeType?: string; description?: string; server?: string; text?: string }>>("get_gateway_resources")
+      if (Array.isArray(nativeRes) && nativeRes.length > 0) {
+        return nativeRes.map((r, idx) => ({
+          id: `res-${r.server || "native"}-${idx + 1}`,
+          uri: r.uri || "",
+          name: r.name || r.title || `Resource ${idx + 1}`,
+          server: r.server || "Coolify",
+          mimeType: r.mimeType || "application/json",
+          description: r.description || r.title || "",
+          content: typeof r.text === "string" ? r.text : undefined,
+        }))
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  try {
+    const res = await fetch("http://127.0.0.1:8080/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: `res-${Date.now()}`, method: "resources/list", params: {} }),
+    })
+    if (res.ok) {
+      const json = await res.json()
+      if (json?.result?.resources && Array.isArray(json.result.resources)) {
+        return json.result.resources.map((r: { uri?: string; name?: string; title?: string; mimeType?: string; description?: string; server?: string; text?: string }, idx: number) => ({
+          id: `res-${r.server || "core"}-${idx + 1}`,
+          uri: r.uri || "",
+          name: r.name || r.title || `Resource ${idx + 1}`,
+          server: r.server || "Coolify",
+          mimeType: r.mimeType || "application/json",
+          description: r.description || r.title || "",
+          content: typeof r.text === "string" ? r.text : undefined,
+        }))
+      }
+    }
+  } catch {
+    // fallback
+  }
+
   const servers = await fetchDiscoveredServers()
   if (servers.length === 0) return []
 
@@ -750,6 +878,45 @@ export async function fetchDiscoveredResources(): Promise<McpResource[]> {
 }
 
 export async function fetchDiscoveredPrompts(): Promise<McpPrompt[]> {
+  if (isTauri()) {
+    try {
+      const nativePrompts = await invoke<Array<{ name?: string; title?: string; description?: string; server?: string; arguments?: Array<{ name: string; description: string; required?: boolean }> }>>("get_gateway_prompts")
+      if (Array.isArray(nativePrompts) && nativePrompts.length > 0) {
+        return nativePrompts.map((p, idx) => ({
+          id: `prompt-${p.server || "native"}-${idx + 1}`,
+          name: p.name || `Prompt ${idx + 1}`,
+          server: p.server || "Coolify",
+          description: p.description || p.title || "",
+          arguments: p.arguments || [],
+        }))
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  try {
+    const res = await fetch("http://127.0.0.1:8080/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: `prompt-${Date.now()}`, method: "prompts/list", params: {} }),
+    })
+    if (res.ok) {
+      const json = await res.json()
+      if (json?.result?.prompts && Array.isArray(json.result.prompts)) {
+        return json.result.prompts.map((p: { name?: string; title?: string; description?: string; server?: string; arguments?: Array<{ name: string; description: string; required?: boolean }> }, idx: number) => ({
+          id: `prompt-${p.server || "core"}-${idx + 1}`,
+          name: p.name || `Prompt ${idx + 1}`,
+          server: p.server || "Coolify",
+          description: p.description || p.title || "",
+          arguments: p.arguments || [],
+        }))
+      }
+    }
+  } catch {
+    // fallback
+  }
+
   const servers = await fetchDiscoveredServers()
   if (servers.length === 0) return []
 
@@ -935,5 +1102,181 @@ export function deleteCustomServer(id: string) {
     }
   }
 }
+
+export interface IdeStatus {
+  ide: string
+  name: string
+  path: string
+  exists: boolean
+  configured: boolean
+  mcpName: string
+}
+
+export async function fetchIdeStatuses(): Promise<IdeStatus[]> {
+  if (isTauri()) {
+    try {
+      return await invoke<IdeStatus[]>("get_ide_integration_status")
+    } catch {
+      // fallback
+    }
+  }
+  return [
+    { ide: "cursor", name: "Cursor", path: "~/.cursor/mcp.json", exists: true, configured: true, mcpName: "mcp-gateway" },
+    { ide: "antigravity", name: "Google Antigravity", path: "~/.gemini/config/mcp_config.json", exists: true, configured: true, mcpName: "mcp-gateway" },
+    { ide: "claude", name: "Claude Desktop", path: "~/Library/Application Support/Claude/claude_desktop_config.json", exists: false, configured: false, mcpName: "mcp-gateway" },
+    { ide: "vscode", name: "VS Code (Cline / Roo)", path: "~/.vscode/mcp.json", exists: false, configured: false, mcpName: "mcp-gateway" },
+  ]
+}
+
+export async function syncIdeConfig(ide: string, port = 8080): Promise<string> {
+  if (isTauri()) {
+    return await invoke<string>("sync_ide_config", { ide, port })
+  }
+  return `Configured ${ide} MCP gateway on port ${port}`
+}
+
+export interface PendingApprovalItem {
+  ticket: string
+  toolName: string
+  serverName: string
+  arguments: Record<string, unknown>
+  status: "pending" | "approved" | "rejected"
+  createdAtMs: number
+  expiresAtMs: number
+}
+
+export async function fetchPendingApprovals(): Promise<PendingApprovalItem[]> {
+  if (isTauri()) {
+    try {
+      return await invoke<PendingApprovalItem[]>("get_pending_approvals")
+    } catch {
+      // ignore
+    }
+  }
+  return []
+}
+
+export async function resolveApproval(ticket: string, approved: boolean): Promise<void> {
+  if (isTauri()) {
+    await invoke("resolve_approval", { ticket, approved })
+  }
+}
+
+export interface CloudflareTunnelStatus {
+  isInstalled: boolean
+  isRunning: boolean
+  publicUrl?: string
+  mode: "quick" | "token"
+  pid?: number
+  binaryPath?: string
+  error?: string
+}
+
+export async function fetchCloudflareTunnelStatus(): Promise<CloudflareTunnelStatus> {
+  if (isTauri()) {
+    try {
+      return await invoke<CloudflareTunnelStatus>("get_cloudflare_tunnel_status")
+    } catch {
+      // fallback
+    }
+  }
+  return {
+    isInstalled: false,
+    isRunning: false,
+    mode: "quick",
+  }
+}
+
+export async function startCloudflareTunnel(
+  mode: "quick" | "token" = "quick",
+  token?: string,
+  port = 8080
+): Promise<CloudflareTunnelStatus> {
+  if (isTauri()) {
+    return await invoke<CloudflareTunnelStatus>("start_cloudflare_tunnel", {
+      mode,
+      token,
+      port,
+    })
+  }
+  throw new Error("Tauri runtime required to control cloudflared")
+}
+
+export async function stopCloudflareTunnel(): Promise<void> {
+  if (isTauri()) {
+    await invoke("stop_cloudflare_tunnel")
+  }
+}
+
+export interface DatabaseConfig {
+  id: string
+  alias: string
+  name: string
+  engine: "postgres" | "mysql" | "sqlite" | "redis"
+  connectionUri: string
+  securityTier: "read_only" | "hitl_mutation" | "unrestricted"
+  description?: string
+  enabled: boolean
+  createdAt?: string
+}
+
+export async function fetchDatabases(): Promise<DatabaseConfig[]> {
+  if (isTauri()) {
+    try {
+      return await invoke<DatabaseConfig[]>("get_gateway_databases")
+    } catch {
+      // fallback
+    }
+  }
+  const raw = localStorage.getItem("mcp_gateway_databases")
+  return raw ? JSON.parse(raw) : []
+}
+
+export async function saveDatabase(db: DatabaseConfig): Promise<void> {
+  if (isTauri()) {
+    await invoke("save_gateway_database", { database: db })
+    return
+  }
+  const list = await fetchDatabases()
+  const idx = list.findIndex((d) => d.id === db.id || d.alias === db.alias)
+  if (idx >= 0) {
+    list[idx] = db
+  } else {
+    list.push(db)
+  }
+  localStorage.setItem("mcp_gateway_databases", JSON.stringify(list))
+}
+
+export async function deleteDatabase(id: string): Promise<void> {
+  if (isTauri()) {
+    await invoke("delete_gateway_database", { id })
+    return
+  }
+  const list = (await fetchDatabases()).filter((d) => d.id !== id)
+  localStorage.setItem("mcp_gateway_databases", JSON.stringify(list))
+}
+
+export async function testDatabaseConnection(uri: string, engine?: string): Promise<string> {
+  if (isTauri()) {
+    return await invoke<string>("test_gateway_database_connection", { uri, engine })
+  }
+  return "Connected successfully (Mock - Tauri required for live database connection)"
+}
+
+export async function executeDatabaseQuery(
+  dbAlias: string,
+  sql: string,
+  maxRows?: number
+): Promise<Record<string, unknown>> {
+  if (isTauri()) {
+    return await invoke<Record<string, unknown>>("execute_gateway_database_query", {
+      dbAlias,
+      sql,
+      maxRows,
+    })
+  }
+  throw new Error("Tauri runtime required to execute live database queries")
+}
+
 
 

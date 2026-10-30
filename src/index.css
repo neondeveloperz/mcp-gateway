@@ -150,8 +150,8 @@ body {
 
 /* Scope the desktop scroll shell to the generated root container only. */
 [data-ui-scroll-container] {
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
+  max-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: none;

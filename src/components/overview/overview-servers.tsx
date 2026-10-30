@@ -80,11 +80,12 @@ export function OverviewServers({
     setPingingId(null)
 
     if (res.success) {
+      const latency = typeof res.latencyMs === "number" && !isNaN(res.latencyMs) ? res.latencyMs : 1
       toast.success(`Ping: ${server.name}`, {
-        description: `Roundtrip latency: ${res.latencyMs}ms · ${res.message}`,
+        description: `Roundtrip latency: ${latency}ms · ${res.message}`,
       })
       setServers((prev) => {
-        const updated = prev.map((s) => (s.id === server.id ? { ...s, latencyMs: res.latencyMs } : s))
+        const updated = prev.map((s) => (s.id === server.id ? { ...s, latencyMs: latency } : s))
         saveServers(updated)
         onServerUpdate?.(updated)
         return updated
@@ -132,18 +133,18 @@ export function OverviewServers({
   }
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <div>
+    <Card className="flex flex-col min-w-0">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 min-w-0">
+        <div className="min-w-0">
           <CardTitle className="flex items-center gap-2 text-base font-semibold">
-            <ServerIcon className="size-4 text-primary" />
-            Active MCP Servers ({servers.length})
+            <ServerIcon className="size-4 text-primary shrink-0" />
+            <span>Active MCP Servers ({servers.length})</span>
           </CardTitle>
-          <CardDescription className="text-xs">
+          <CardDescription className="text-xs truncate">
             Live servers scanned from user environment (~/.cursor/mcp.json, ~/.gemini/config/mcp_config.json)
           </CardDescription>
         </div>
-        <CardAction className="flex items-center gap-1.5">
+        <CardAction className="flex flex-wrap items-center gap-1.5 shrink-0">
           <Button
             variant="ghost"
             size="sm"
@@ -160,17 +161,19 @@ export function OverviewServers({
             size="sm"
             onClick={() => setShowAddServer((v) => !v)}
             className="h-7 px-2 text-xs cursor-pointer gap-1"
+            title={showAddServer ? "Cancel" : "Add Server"}
           >
             <PlusIcon className="size-3.5" />
-            <span>{showAddServer ? "Cancel" : "Add Server"}</span>
+            <span className="hidden sm:inline">{showAddServer ? "Cancel" : "Add Server"}</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onNavigate?.("servers")}
             className="h-7 px-2 text-xs cursor-pointer gap-1 text-primary hover:text-primary"
+            title="View Details"
           >
-            <span>Details</span>
+            <span className="hidden sm:inline">Details</span>
             <ArrowRightIcon className="size-3.5" />
           </Button>
         </CardAction>
@@ -317,7 +320,7 @@ export function OverviewServers({
                         title="Test live roundtrip ping"
                       >
                         <ZapIcon className={`size-3.5 ${pingingId === server.id ? "animate-bounce text-amber-400" : ""}`} />
-                        <span className="ml-1">Ping</span>
+                        <span className="hidden sm:inline ml-1">Ping</span>
                       </Button>
                       <Button
                         variant={isOnline ? "outline" : "default"}
@@ -326,16 +329,17 @@ export function OverviewServers({
                         className={`h-7 cursor-pointer px-2 text-xs ${
                           isOnline ? "text-destructive hover:text-destructive" : ""
                         }`}
+                        title={isOnline ? "Stop Server" : "Start Server"}
                       >
                         {isOnline ? (
                           <>
-                            <SquareIcon className="size-3 mr-1 fill-current" />
-                            <span>Stop</span>
+                            <SquareIcon className="size-3 fill-current sm:mr-1" />
+                            <span className="hidden sm:inline">Stop</span>
                           </>
                         ) : (
                           <>
-                            <PlayIcon className="size-3 mr-1 fill-current" />
-                            <span>Start</span>
+                            <PlayIcon className="size-3 fill-current sm:mr-1" />
+                            <span className="hidden sm:inline">Start</span>
                           </>
                         )}
                       </Button>

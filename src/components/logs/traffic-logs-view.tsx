@@ -46,8 +46,11 @@ import {
   ZapIcon,
   EyeIcon,
   ArrowDownToLineIcon,
+  LockIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { TablePagination } from "@/components/ui/table-pagination"
+import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
 import {
   getRpcLogs,
   clearRpcLogs,
@@ -70,6 +73,13 @@ export function TrafficLogsView() {
   const [activeInspectorLog, setActiveInspectorLog] = React.useState<RpcLog | null>(null)
   const [isSheetOpen, setIsSheetOpen] = React.useState(false)
   const [isSendingTest, setIsSendingTest] = React.useState(false)
+
+  // Sorting & Pagination
+  type LogSortKey = "time" | "status" | "method" | "server" | "target" | "latency" | "clientIp"
+  const [sortKey, setSortKey] = React.useState<LogSortKey | null>("time")
+  const [sortOrder, setSortOrder] = React.useState<SortOrder>("desc")
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(15)
 
   const logContainerRef = React.useRef<HTMLDivElement>(null)
 
@@ -114,12 +124,64 @@ export function TrafficLogsView() {
     return matchSearch && matchServer && matchMethod && matchStatus
   })
 
+  const handleSort = (column: LogSortKey) => {
+    if (sortKey === column) {
+      if (sortOrder === "asc") setSortOrder("desc")
+      else if (sortOrder === "desc") {
+        setSortKey(null)
+        setSortOrder(null)
+      }
+    } else {
+      setSortKey(column)
+      setSortOrder("asc")
+    }
+    setCurrentPage(1)
+  }
+
+  const sortedLogs = React.useMemo(() => {
+    if (!sortKey || !sortOrder) return filteredLogs
+    return [...filteredLogs].sort((a, b) => {
+      let comparison = 0
+      switch (sortKey) {
+        case "time":
+          comparison = a.time.localeCompare(b.time)
+          break
+        case "status":
+          comparison = a.status.localeCompare(b.status)
+          break
+        case "method":
+          comparison = a.method.localeCompare(b.method)
+          break
+        case "server":
+          comparison = a.server.localeCompare(b.server)
+          break
+        case "target":
+          comparison = a.target.localeCompare(b.target)
+          break
+        case "latency":
+          comparison = a.latencyMs - b.latencyMs
+          break
+        case "clientIp":
+          comparison = (a.clientIp || "").localeCompare(b.clientIp || "")
+          break
+      }
+      return sortOrder === "asc" ? comparison : -comparison
+    })
+  }, [filteredLogs, sortKey, sortOrder])
+
+  const paginatedLogs = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return sortedLogs.slice(start, start + pageSize)
+  }, [sortedLogs, currentPage, pageSize])
+
   // Metrics calculations
   const totalCalls = logs.length
   const successCount = logs.filter((l) => l.status === "success").length
   const successRate = totalCalls > 0 ? Math.round((successCount / totalCalls) * 100) : 100
   const avgLatency =
-    totalCalls > 0 ? Math.round(logs.reduce((acc, curr) => acc + curr.latencyMs, 0) / totalCalls) : 0
+    totalCalls > 0
+      ? Math.round(logs.reduce((acc, curr) => acc + (Number(curr.latencyMs) || 0), 0) / totalCalls)
+      : 0
 
   const handleClearLogs = () => {
     clearRpcLogs()
@@ -233,7 +295,7 @@ export function TrafficLogsView() {
   }
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       {/* Top Header Banner */}
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
@@ -261,6 +323,10 @@ export function TrafficLogsView() {
               <Badge variant="outline" className="font-mono text-xs text-muted-foreground">
                 Protocol: JSON-RPC 2.0
               </Badge>
+              <Badge variant="outline" className="font-mono text-xs text-emerald-500 border-emerald-500/20 bg-emerald-500/10 gap-1">
+                <LockIcon className="size-3" />
+                <span>Tokens Shielded</span>
+              </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
               Deep telemetry inspection, payload debugging, latency analysis, and execution traces for all MCP servers
@@ -268,33 +334,34 @@ export function TrafficLogsView() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <Button
             variant={autoScroll ? "default" : "outline"}
             size="sm"
             onClick={() => setAutoScroll((prev) => !prev)}
-            className="cursor-pointer gap-1.5 text-xs h-8"
+            className="cursor-pointer gap-1.5 text-xs h-8 px-2 sm:px-3"
             title={autoScroll ? "Auto-scroll to top enabled" : "Auto-scroll disabled"}
           >
             <ArrowDownToLineIcon className="size-3.5" />
-            <span>Auto-scroll</span>
+            <span className="hidden sm:inline">Auto-scroll</span>
           </Button>
 
           <Button
             variant="outline"
             size="sm"
             onClick={() => setIsStreaming((prev) => !prev)}
-            className="cursor-pointer gap-1.5 text-xs h-8"
+            className="cursor-pointer gap-1.5 text-xs h-8 px-2 sm:px-3"
+            title={isStreaming ? "Pause live streaming" : "Resume streaming"}
           >
             {isStreaming ? (
               <>
                 <PauseIcon className="size-3.5 text-amber-400" />
-                <span>Pause</span>
+                <span className="hidden sm:inline">Pause</span>
               </>
             ) : (
               <>
                 <PlayIcon className="size-3.5 text-emerald-400" />
-                <span>Resume</span>
+                <span className="hidden sm:inline">Resume</span>
               </>
             )}
           </Button>
@@ -304,10 +371,11 @@ export function TrafficLogsView() {
             size="sm"
             onClick={handleSendTestCall}
             disabled={isSendingTest}
-            className="cursor-pointer gap-1.5 text-xs h-8"
+            className="cursor-pointer gap-1.5 text-xs h-8 px-2 sm:px-3"
+            title="Send Test JSON-RPC Call"
           >
             <SendIcon className={`size-3.5 ${isSendingTest ? "animate-spin" : ""}`} />
-            <span>Send Test RPC</span>
+            <span className="hidden sm:inline">Send Test RPC</span>
           </Button>
 
           <Button
@@ -315,10 +383,11 @@ export function TrafficLogsView() {
             size="sm"
             onClick={handleExportLogs}
             disabled={logs.length === 0}
-            className="cursor-pointer gap-1.5 text-xs h-8"
+            className="cursor-pointer gap-1.5 text-xs h-8 px-2 sm:px-3"
+            title="Export Logs"
           >
             <DownloadIcon className="size-3.5" />
-            <span>Export</span>
+            <span className="hidden sm:inline">Export</span>
           </Button>
 
           <Button
@@ -326,10 +395,11 @@ export function TrafficLogsView() {
             size="sm"
             onClick={handleClearLogs}
             disabled={logs.length === 0}
-            className="cursor-pointer gap-1.5 text-xs h-8 text-destructive hover:text-destructive"
+            className="cursor-pointer gap-1.5 text-xs h-8 px-2 sm:px-3 text-destructive hover:text-destructive"
+            title="Clear Logs"
           >
             <Trash2Icon className="size-3.5" />
-            <span>Clear</span>
+            <span className="hidden sm:inline">Clear</span>
           </Button>
         </div>
       </div>
@@ -477,18 +547,46 @@ export function TrafficLogsView() {
             <Table>
               <TableHeader className="sticky top-0 bg-card z-10">
                 <TableRow className="border-t hover:bg-transparent">
-                  <TableHead className="w-20 text-xs font-semibold">Time</TableHead>
-                  <TableHead className="w-24 text-xs font-semibold">Status</TableHead>
-                  <TableHead className="w-32 text-xs font-semibold">Method</TableHead>
-                  <TableHead className="w-32 text-xs font-semibold">Server</TableHead>
-                  <TableHead className="text-xs font-semibold">Target / Action</TableHead>
-                  <TableHead className="w-24 text-xs font-semibold">Latency</TableHead>
-                  <TableHead className="w-24 text-xs font-semibold">Client IP</TableHead>
+                  <TableHead className="w-24 text-xs font-semibold">
+                    <TableSortHeader column="time" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Time
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-24 text-xs font-semibold">
+                    <TableSortHeader column="status" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Status
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-32 text-xs font-semibold">
+                    <TableSortHeader column="method" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Method
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-32 text-xs font-semibold">
+                    <TableSortHeader column="server" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Server
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold">
+                    <TableSortHeader column="target" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Target / Action
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-24 text-xs font-semibold">
+                    <TableSortHeader column="latency" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Latency
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-24 text-xs font-semibold">
+                    <TableSortHeader column="clientIp" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Client IP
+                    </TableSortHeader>
+                  </TableHead>
                   <TableHead className="w-20 text-right text-xs font-semibold">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLogs.length === 0 ? (
+                {sortedLogs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="py-16 text-center text-xs text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
@@ -501,7 +599,7 @@ export function TrafficLogsView() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredLogs.map((log) => {
+                  paginatedLogs.map((log) => {
                     const methodBadge = getMethodBadgeClass(log.method)
                     const latencyBadge = getLatencyBadgeClass(log.latencyMs)
                     return (
@@ -582,6 +680,15 @@ export function TrafficLogsView() {
               </TableBody>
             </Table>
           </div>
+
+          <TablePagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalItems={sortedLogs.length}
+            pageSizeOptions={[10, 15, 25, 50, 100]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 

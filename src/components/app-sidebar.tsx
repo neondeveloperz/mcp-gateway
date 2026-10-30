@@ -23,13 +23,15 @@ import {
   BookOpenIcon,
   RadioIcon,
   CircleHelpIcon,
-  CpuIcon,
+  GlobeIcon,
+  DatabaseIcon,
 } from "lucide-react"
 import {
   type McpServer,
   subscribeToServers,
   fetchDiscoveredTools,
   fetchDiscoveredResources,
+  fetchDatabases,
 } from "@/lib/mcp-service"
 
 export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
@@ -47,6 +49,7 @@ export function AppSidebar({
   const [servers, setServers] = React.useState<McpServer[]>([])
   const [toolsCount, setToolsCount] = React.useState<number>(0)
   const [resourcesCount, setResourcesCount] = React.useState<number>(0)
+  const [dbCount, setDbCount] = React.useState<number>(0)
 
   React.useEffect(() => {
     const unsubscribe = subscribeToServers((updated) => {
@@ -57,7 +60,15 @@ export function AppSidebar({
       fetchDiscoveredResources().then((res) => {
         setResourcesCount(res.length)
       })
+      fetchDatabases().then((dbs) => {
+        setDbCount(dbs.filter((d) => d.enabled).length)
+      })
     })
+
+    fetchDatabases().then((dbs) => {
+      setDbCount(dbs.filter((d) => d.enabled).length)
+    })
+
     return unsubscribe
   }, [])
 
@@ -78,6 +89,13 @@ export function AppSidebar({
       url: "#servers",
       badge: `${onlineServers} Active`,
       icon: <ServerIcon className="size-4" />,
+    },
+    {
+      id: "databases",
+      title: "Databases (Built-in)",
+      url: "#databases",
+      badge: dbCount > 0 ? `${dbCount} PG` : "Connect",
+      icon: <DatabaseIcon className="size-4" />,
     },
     {
       id: "tools",
@@ -116,6 +134,13 @@ export function AppSidebar({
       icon: <ShieldCheckIcon className="size-4" />,
     },
     {
+      id: "tunnel",
+      name: "Cloudflare Tunnel",
+      url: "#tunnel",
+      icon: <GlobeIcon className="size-4" />,
+      badge: "Remote",
+    },
+    {
       id: "settings",
       name: "Gateway Settings",
       url: "#settings",
@@ -145,7 +170,7 @@ export function AppSidebar({
   ]
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
+    <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -155,10 +180,10 @@ export function AppSidebar({
               onClick={() => onSelectItem?.("overview")}
               className="cursor-pointer hover:bg-sidebar-accent"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-                <CpuIcon className="size-4" />
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-xs ring-1 ring-border/50 p-1">
+                <img src="/app-icon.png" alt="MCP Gateway" className="size-full object-contain" />
               </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:hidden">
                 <span className="truncate font-semibold tracking-tight">MCP Gateway</span>
                 <span className="truncate text-xs text-muted-foreground">version 0.1.0</span>
               </div>

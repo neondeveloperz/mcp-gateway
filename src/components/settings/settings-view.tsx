@@ -31,9 +31,20 @@ import {
   CpuIcon,
   HardDriveIcon,
   LockIcon,
+  SparklesIcon,
+  ZapIcon,
+  ShieldAlertIcon,
+  CheckIcon,
+  RefreshCwIcon,
 } from "lucide-react"
 import { toast } from "sonner"
-import { fetchSystemInfo, type SystemInfo } from "@/lib/mcp-service"
+import {
+  fetchSystemInfo,
+  fetchIdeStatuses,
+  syncIdeConfig,
+  type SystemInfo,
+  type IdeStatus,
+} from "@/lib/mcp-service"
 
 export interface GatewayConfig {
   // Network
@@ -112,6 +123,36 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
   const [isSaving, setIsSaving] = React.useState(false)
   const [systemInfo, setSystemInfo] = React.useState<SystemInfo | null>(null)
   const [uptimeSeconds, setUptimeSeconds] = React.useState<number>(15238)
+  const [ideStatuses, setIdeStatuses] = React.useState<IdeStatus[]>([])
+  const [syncingIde, setSyncingIde] = React.useState<string | null>(null)
+
+  const reloadIdes = React.useCallback(async () => {
+    try {
+      const list = await fetchIdeStatuses()
+      setIdeStatuses(list)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  React.useEffect(() => {
+    reloadIdes()
+  }, [reloadIdes])
+
+  const handleSyncIde = async (ide: string, name: string) => {
+    setSyncingIde(ide)
+    try {
+      const msg = await syncIdeConfig(ide, config.port)
+      toast.success(`Configured for ${name}`, {
+        description: msg,
+      })
+      await reloadIdes()
+    } catch (err) {
+      toast.error(`Sync Failed: ${String(err)}`)
+    } finally {
+      setSyncingIde(null)
+    }
+  }
 
   React.useEffect(() => {
     fetchSystemInfo().then((info) => {
@@ -126,10 +167,15 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
     return () => clearInterval(timer)
   }, [])
 
-  const formatUptime = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
+  const formatUptime = (totalSeconds: number | undefined | null) => {
+    const secs = Math.max(0, Math.floor(Number(totalSeconds) || 0))
+    const days = Math.floor(secs / 86400)
+    const hours = Math.floor((secs % 86400) / 3600)
+    const minutes = Math.floor((secs % 3600) / 60)
+    const seconds = secs % 60
+    if (days > 0) {
+      return `${days}d ${hours}h ${minutes}m ${seconds}s`
+    }
     return `${hours}h ${minutes}m ${seconds}s`
   }
 
@@ -181,7 +227,7 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
   const isPublicHost = config.host === "0.0.0.0"
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       {/* Top Banner & Quick Actions */}
       <div className="flex flex-col gap-4 rounded-xl border bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
@@ -198,33 +244,36 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={handleExport}
-            className="cursor-pointer gap-1.5 text-xs"
+            className="cursor-pointer gap-1.5 text-xs px-2 sm:px-3"
+            title="Export Configuration JSON"
           >
             <DownloadIcon className="size-3.5" />
-            <span>Export JSON</span>
+            <span className="hidden sm:inline">Export JSON</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={handleReset}
-            className="cursor-pointer gap-1.5 text-xs"
+            className="cursor-pointer gap-1.5 text-xs px-2 sm:px-3"
+            title="Reset Defaults"
           >
             <RotateCcwIcon className="size-3.5" />
-            <span>Reset</span>
+            <span className="hidden sm:inline">Reset</span>
           </Button>
           <Button
             size="sm"
             onClick={handleSave}
             disabled={isSaving || !hasChanges}
-            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground text-xs font-medium"
+            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground text-xs font-medium px-2 sm:px-3"
+            title="Save Configuration Changes"
           >
             <SaveIcon className="size-3.5" />
-            <span>{isSaving ? "Saving..." : "Save Changes"}</span>
+            <span className="hidden sm:inline">{isSaving ? "Saving..." : "Save Changes"}</span>
           </Button>
         </div>
       </div>
@@ -270,8 +319,16 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
       </div>
 
       {/* Categorized Settings Tabs */}
-      <Tabs defaultValue="network" className="w-full space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-9">
+      <Tabs defaultValue="ides" className="w-full space-y-4">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto p-1 gap-1">
+          <TabsTrigger value="ides" className="cursor-pointer gap-1.5 text-xs">
+            <SparklesIcon className="size-3.5" />
+            <span>1-Click IDE Sync</span>
+          </TabsTrigger>
+          <TabsTrigger value="governance" className="cursor-pointer gap-1.5 text-xs">
+            <ShieldAlertIcon className="size-3.5" />
+            <span>Loop & Circuit Guard</span>
+          </TabsTrigger>
           <TabsTrigger value="network" className="cursor-pointer gap-1.5 text-xs">
             <NetworkIcon className="size-3.5" />
             <span>Network & Ports</span>
@@ -280,15 +337,176 @@ export function SettingsView({ onNavigate }: { onNavigate?: (tab: string) => voi
             <ShieldCheckIcon className="size-3.5" />
             <span>Security & Auth</span>
           </TabsTrigger>
-          <TabsTrigger value="execution" className="cursor-pointer gap-1.5 text-xs">
-            <ClockIcon className="size-3.5" />
-            <span>Execution & Limits</span>
-          </TabsTrigger>
           <TabsTrigger value="logging" className="cursor-pointer gap-1.5 text-xs">
             <FileTextIcon className="size-3.5" />
             <span>Logs & Telemetry</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* 0. 1-Click IDE Auto-Configuration */}
+        <TabsContent value="ides" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-col gap-2 pb-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <SparklesIcon className="size-4 text-primary" />
+                  One-Click IDE Auto-Configuration
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Connect your AI coding assistants directly to MCP Gateway without editing JSON files manually.
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={reloadIdes}
+                className="cursor-pointer gap-1.5 text-xs self-start md:self-auto"
+              >
+                <RefreshCwIcon className="size-3.5" />
+                <span>Refresh Status</span>
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {ideStatuses.map((item) => (
+                  <div
+                    key={item.ide}
+                    className="flex flex-col justify-between p-3.5 rounded-lg border bg-card/60 hover:bg-card transition-colors space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-semibold text-foreground">{item.name}</h4>
+                          {item.configured ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] gap-1">
+                              <CheckIcon className="size-3" />
+                              <span>Connected</span>
+                            </Badge>
+                          ) : item.exists ? (
+                            <Badge variant="outline" className="text-amber-500 border-amber-500/30 text-[10px]">
+                              File Ready
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                              Not Installed
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="font-mono text-[11px] text-muted-foreground break-all">
+                          {item.path}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-border/40 text-xs">
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        Target: http://{config.host}:{config.port}{item.ide === "cursor" ? "/sse" : "/mcp"}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant={item.configured ? "outline" : "default"}
+                        disabled={syncingIde === item.ide}
+                        onClick={() => handleSyncIde(item.ide, item.name)}
+                        className="cursor-pointer gap-1.5 text-xs h-7"
+                      >
+                        <SparklesIcon className="size-3" />
+                        <span>
+                          {syncingIde === item.ide
+                            ? "Syncing..."
+                            : item.configured
+                            ? "Re-Sync"
+                            : "1-Click Connect"}
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 1. Loop & Circuit Guard Governance */}
+        <TabsContent value="governance" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <ShieldAlertIcon className="size-4 text-amber-500" />
+                Anti-Loop & Resilience Governance
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Real-time safety guardrails to protect against runaway agent retry loops and downstream cascade outages
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Anti-Loop Guard */}
+                <div className="p-4 rounded-lg border bg-card/60 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm flex items-center gap-2">
+                      <ZapIcon className="size-4 text-amber-500" />
+                      Anti-Loop Guard
+                    </span>
+                    <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px]">
+                      Active (Max 5 / 10s)
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Intercepts autonomous agent infinite retry loops. If an agent calls the exact same tool with identical arguments 5 times within a 10-second rolling window, execution halts immediately with JSON-RPC error <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">-32009</code>.
+                  </p>
+                </div>
+
+                {/* Circuit Breaker */}
+                <div className="p-4 rounded-lg border bg-card/60 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm flex items-center gap-2">
+                      <ShieldCheckIcon className="size-4 text-sky-500" />
+                      Downstream Circuit Breaker
+                    </span>
+                    <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px]">
+                      Active (3 Fails · 15s Cooloff)
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Fail-fast circuit breaker for downstream MCP servers. When a remote server encounters 3 consecutive failures, the circuit trips to OPEN for 15 seconds, returning error <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">-32008</code> to prevent hanging the LLM.
+                  </p>
+                </div>
+
+                {/* Tool Namespacing & Collision Prevention */}
+                <div className="p-4 rounded-lg border bg-card/60 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm flex items-center gap-2">
+                      <CheckCircle2Icon className="size-4 text-emerald-500" />
+                      Namespacing & Collision Guard
+                    </span>
+                    <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px]">
+                      Auto-Prefix Collisions
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically scans all registered MCP servers. When two servers provide a tool with identical names, tools are automatically namespaced (<code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">coolify_deploy</code> vs <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">easypanel_deploy</code>) with zero LLM confusion.
+                  </p>
+                </div>
+
+                {/* Secret Masking & Traffic Redaction */}
+                <div className="p-4 rounded-lg border bg-card/60 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm flex items-center gap-2">
+                      <LockIcon className="size-4 text-primary" />
+                      Secret Masking & Redaction
+                    </span>
+                    <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px]">
+                      Zero Secret Leakage
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    All Bearer tokens, private keys, API secrets, and password strings are automatically redacted from traffic inspection tables, stdout diagnostics, and persistent disk logs using regex patterns.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* 1. Network & Ports */}
         <TabsContent value="network" className="space-y-4">

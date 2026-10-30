@@ -8,10 +8,13 @@ import { ResourcesView } from "@/components/resources/resources-view"
 import { TrafficLogsView } from "@/components/logs/traffic-logs-view"
 import { ApiKeysView } from "@/components/tokens/api-keys-view"
 import { SecurityView } from "@/components/security/security-view"
+import { CloudflareTunnelView } from "@/components/tunnel/cloudflare-tunnel-view"
+import { DatabasesView } from "@/components/database/databases-view"
 import { SettingsView } from "@/components/settings/settings-view"
 import { DocsView } from "@/components/docs/docs-view"
 import { StatusView } from "@/components/status/status-view"
 import { HelpView } from "@/components/help/help-view"
+import { ApprovalModal } from "@/components/security/approval-modal"
 import {
   SidebarInset,
   SidebarProvider,
@@ -22,11 +25,13 @@ import { Toaster } from "@/components/ui/sonner"
 const tabTitles: Record<string, string> = {
   overview: "Overview",
   servers: "MCP Servers",
+  databases: "Databases (Built-in)",
   tools: "Tools Explorer",
   resources: "Resources & Prompts",
   logs: "Traffic & Logs",
   keys: "API Keys & Tokens",
   security: "Security & Permissions",
+  tunnel: "Cloudflare Tunnel",
   settings: "Gateway Settings",
   docs: "Documentation",
   status: "System Health",
@@ -39,6 +44,7 @@ export default function App() {
   return (
     <TooltipProvider>
       <SidebarProvider
+        className="h-screen max-h-screen overflow-hidden"
         style={
           {
             "--sidebar-width": "calc(var(--spacing) * 72)",
@@ -48,15 +54,18 @@ export default function App() {
       >
         <AppSidebar
           variant="inset"
+          collapsible="icon"
           activeItem={activeTab}
           onSelectItem={setActiveTab}
           onAddServer={() => setActiveTab("servers")}
         />
         <SidebarInset>
           <SiteHeader title={tabTitles[activeTab] ?? "Overview"} />
-          <main className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0" data-ui-scroll-container>
             {activeTab === "servers" ? (
               <ServersView />
+            ) : activeTab === "databases" ? (
+              <DatabasesView />
             ) : activeTab === "tools" ? (
               <ToolsView />
             ) : activeTab === "resources" ? (
@@ -67,6 +76,8 @@ export default function App() {
               <ApiKeysView />
             ) : activeTab === "security" ? (
               <SecurityView />
+            ) : activeTab === "tunnel" ? (
+              <CloudflareTunnelView />
             ) : activeTab === "settings" ? (
               <SettingsView onNavigate={setActiveTab} />
             ) : activeTab === "docs" ? (
@@ -81,9 +92,10 @@ export default function App() {
                 onAddServer={() => setActiveTab("servers")}
               />
             )}
-          </main>
+          </div>
         </SidebarInset>
       </SidebarProvider>
+      <ApprovalModal />
       <Toaster position="bottom-right" richColors />
     </TooltipProvider>
   )

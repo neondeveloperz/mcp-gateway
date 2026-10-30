@@ -24,7 +24,7 @@ export function OverviewView({
   const totalTools = servers.reduce((acc, s) => acc + (s.toolsCount || 0), 0)
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       <OverviewHeader
         serversCount={onlineCount}
         toolsCount={totalTools}

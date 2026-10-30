@@ -43,12 +43,12 @@ export function NavMain({
               onClick={onAddServer}
               className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground cursor-pointer"
             >
-              <PlusCircleIcon className="size-4" />
-              <span className="font-medium">Add Server</span>
+              <PlusCircleIcon className="size-4 shrink-0" />
+              <span className="font-medium group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:hidden">Add Server</span>
             </SidebarMenuButton>
             <Button
               size="icon"
-              className="size-8 shrink-0 group-data-[collapsible=icon]:opacity-0 cursor-pointer"
+              className="size-8 shrink-0 group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:hidden cursor-pointer"
               variant="outline"
               title="Gateway Status: Running"
               onClick={() => onSelectItem?.("logs")}
@@ -70,9 +70,9 @@ export function NavMain({
                   className="cursor-pointer"
                 >
                   {item.icon}
-                  <span className="flex-1 truncate">{item.title}</span>
+                  <span className="flex-1 truncate group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:hidden">{item.title}</span>
                   {item.badge != null && (
-                    <span className="ml-auto shrink-0 group-data-[collapsible=icon]:hidden">
+                    <span className="ml-auto shrink-0 group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:hidden">
                       <MenuBadge badge={item.badge} variant={item.badgeVariant} />
                     </span>
                   )}

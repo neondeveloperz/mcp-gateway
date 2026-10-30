@@ -39,6 +39,8 @@ import {
   ClockIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { TablePagination } from "@/components/ui/table-pagination"
+import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
 import {
   fetchDiscoveredTools,
   fetchDiscoveredServers,
@@ -54,6 +56,13 @@ export function ToolsView() {
   const [search, setSearch] = React.useState("")
   const [selectedServer, setSelectedServer] = React.useState<string>("all")
   const [selectedCategory, setSelectedCategory] = React.useState<string>("all")
+
+  // Sorting & Pagination
+  type ToolSortKey = "name" | "server" | "category" | "parameters" | "risk"
+  const [sortKey, setSortKey] = React.useState<ToolSortKey | null>("name")
+  const [sortOrder, setSortOrder] = React.useState<SortOrder>("asc")
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(10)
   const [activeTool, setActiveTool] = React.useState<McpTool | null>(null)
   const [isRunnerOpen, setIsRunnerOpen] = React.useState(false)
   const [argsJson, setArgsJson] = React.useState("{}")
@@ -93,6 +102,59 @@ export function ToolsView() {
     const matchCat = selectedCategory === "all" || tool.category === selectedCategory
     return matchSearch && matchServer && matchCat
   })
+
+  const handleSort = (column: ToolSortKey) => {
+    if (sortKey === column) {
+      if (sortOrder === "asc") setSortOrder("desc")
+      else if (sortOrder === "desc") {
+        setSortKey(null)
+        setSortOrder(null)
+      }
+    } else {
+      setSortKey(column)
+      setSortOrder("asc")
+    }
+    setCurrentPage(1)
+  }
+
+  const sortedTools = React.useMemo(() => {
+    if (!sortKey || !sortOrder) return filteredTools
+    const riskWeight: Record<string, number> = {
+      destructive: 4,
+      critical: 3,
+      moderate: 2,
+      low: 1,
+    }
+    return [...filteredTools].sort((a, b) => {
+      let comparison = 0
+      switch (sortKey) {
+        case "name":
+          comparison = a.name.localeCompare(b.name)
+          break
+        case "server":
+          comparison = a.server.localeCompare(b.server)
+          break
+        case "category":
+          comparison = a.category.localeCompare(b.category)
+          break
+        case "parameters":
+          comparison = Object.keys(a.parameters).length - Object.keys(b.parameters).length
+          break
+        case "risk": {
+          const wA = riskWeight[a.riskLevel.toLowerCase()] ?? 0
+          const wB = riskWeight[b.riskLevel.toLowerCase()] ?? 0
+          comparison = wA - wB
+          break
+        }
+      }
+      return sortOrder === "asc" ? comparison : -comparison
+    })
+  }, [filteredTools, sortKey, sortOrder])
+
+  const paginatedTools = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return sortedTools.slice(start, start + pageSize)
+  }, [sortedTools, currentPage, pageSize])
 
   const handleOpenRunner = (tool: McpTool) => {
     setActiveTool(tool)
@@ -149,7 +211,7 @@ export function ToolsView() {
   }
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       {/* Top Banner */}
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
@@ -172,15 +234,16 @@ export function ToolsView() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <Button
             size="sm"
             onClick={() => tools.length > 0 && handleOpenRunner(tools[0])}
             disabled={tools.length === 0}
-            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium text-xs h-8"
+            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium text-xs h-8 px-2 sm:px-3"
+            title="Open Playground"
           >
             <PlayIcon className="size-3.5" />
-            <span>Open Playground</span>
+            <span className="hidden sm:inline">Open Playground</span>
           </Button>
 
           <Button
@@ -188,11 +251,11 @@ export function ToolsView() {
             size="sm"
             onClick={() => reloadTools(true)}
             disabled={isLoading}
-            className="cursor-pointer gap-1.5 text-xs h-8"
+            className="cursor-pointer gap-1.5 text-xs h-8 px-2 sm:px-3"
             title="Reload tools"
           >
             <RotateCwIcon className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            <span>{isLoading ? "Fetching Tools..." : "Refresh Tools"}</span>
+            <span className="hidden sm:inline">{isLoading ? "Fetching..." : "Refresh Tools"}</span>
           </Button>
         </div>
       </div>
@@ -254,17 +317,37 @@ export function ToolsView() {
             <Table>
               <TableHeader>
                 <TableRow className="border-t hover:bg-transparent">
-                  <TableHead className="w-56 text-xs font-semibold">Tool Name</TableHead>
-                  <TableHead className="w-28 text-xs font-semibold">Server</TableHead>
-                  <TableHead className="w-36 text-xs font-semibold">Category</TableHead>
+                  <TableHead className="w-56 text-xs font-semibold">
+                    <TableSortHeader column="name" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Tool Name
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-28 text-xs font-semibold">
+                    <TableSortHeader column="server" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Server
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-36 text-xs font-semibold">
+                    <TableSortHeader column="category" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Category
+                    </TableSortHeader>
+                  </TableHead>
                   <TableHead className="text-xs font-semibold">Description</TableHead>
-                  <TableHead className="w-44 text-xs font-semibold">Parameters</TableHead>
-                  <TableHead className="w-24 text-xs font-semibold">Risk</TableHead>
+                  <TableHead className="w-44 text-xs font-semibold">
+                    <TableSortHeader column="parameters" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Parameters
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-24 text-xs font-semibold">
+                    <TableSortHeader column="risk" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Risk
+                    </TableSortHeader>
+                  </TableHead>
                   <TableHead className="w-28 text-right text-xs font-semibold">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTools.length === 0 ? (
+                {sortedTools.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="py-16 text-center text-xs text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2.5">
@@ -290,7 +373,7 @@ export function ToolsView() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredTools.map((tool) => {
+                  paginatedTools.map((tool) => {
                     const paramKeys = Object.keys(tool.parameters)
                     return (
                       <TableRow key={tool.id} className="hover:bg-muted/30 transition-colors">
@@ -339,10 +422,11 @@ export function ToolsView() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleOpenRunner(tool)}
-                            className="h-7 px-2.5 text-[11px] cursor-pointer gap-1"
+                            className="h-7 px-2 text-[11px] cursor-pointer gap-1"
+                            title={`Test tool: ${tool.name}`}
                           >
                             <PlayIcon className="size-3 text-primary" />
-                            <span>Test</span>
+                            <span className="hidden sm:inline">Test</span>
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -352,10 +436,19 @@ export function ToolsView() {
               </TableBody>
             </Table>
           </div>
+
+          <TablePagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalItems={sortedTools.length}
+            pageSizeOptions={[10, 20, 50, 100]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
         <CardFooter className="flex items-center justify-between border-t border-border/40 text-xs text-muted-foreground">
           <span>Schema definitions synced from registered MCP servers</span>
-          <span>Showing {filteredTools.length} tools</span>
+          <span>{filteredTools.length} tools total</span>
         </CardFooter>
       </Card>
 

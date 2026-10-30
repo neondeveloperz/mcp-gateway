@@ -85,7 +85,7 @@ export function HelpView() {
   ]
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       {/* Top Banner */}
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
@@ -108,15 +108,16 @@ export function HelpView() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
           <Button
             size="sm"
             onClick={handleExportDiagnostics}
             disabled={isExporting}
-            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium text-xs h-8"
+            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium text-xs h-8 px-2 sm:px-3"
+            title="Export Diagnostic Bundle"
           >
             <DownloadIcon className="size-3.5" />
-            <span>{isExporting ? "Exporting..." : "Export Diagnostic Bundle"}</span>
+            <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export Diagnostics"}</span>
           </Button>
         </div>
       </div>

@@ -50,6 +50,8 @@ import {
   SearchIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { TablePagination } from "@/components/ui/table-pagination"
+import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
 import { fetchDiscoveredServers, fetchDiscoveredTools, type McpServer } from "@/lib/mcp-service"
 
 export type ToolPermissionLevel = "auto-allow" | "prompt-confirm" | "block"
@@ -131,6 +133,13 @@ export function SecurityView() {
   const [newBlockedPath, setNewBlockedPath] = React.useState("")
   const [selectedServerFilter, setSelectedServerFilter] = React.useState<string>("all")
   const [ruleSearch, setRuleSearch] = React.useState<string>("")
+
+  // Sorting & Pagination
+  type SecurityRuleSortKey = "server" | "toolPattern" | "riskLevel" | "permission"
+  const [sortKey, setSortKey] = React.useState<SecurityRuleSortKey | null>("server")
+  const [sortOrder, setSortOrder] = React.useState<SortOrder>("asc")
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(10)
 
   React.useEffect(() => {
     fetchDiscoveredServers().then(setServers)
@@ -300,6 +309,53 @@ export function SecurityView() {
     return matchServer && matchSearch
   })
 
+  const handleSort = (column: SecurityRuleSortKey) => {
+    if (sortKey === column) {
+      if (sortOrder === "asc") setSortOrder("desc")
+      else if (sortOrder === "desc") {
+        setSortKey(null)
+        setSortOrder(null)
+      }
+    } else {
+      setSortKey(column)
+      setSortOrder("asc")
+    }
+    setCurrentPage(1)
+  }
+
+  const sortedRules = React.useMemo(() => {
+    if (!sortKey || !sortOrder) return filteredRules
+    const riskWeight: Record<string, number> = {
+      critical: 4,
+      high: 3,
+      medium: 2,
+      low: 1,
+    }
+    return [...filteredRules].sort((a, b) => {
+      let comparison = 0
+      switch (sortKey) {
+        case "server":
+          comparison = a.serverName.localeCompare(b.serverName)
+          break
+        case "toolPattern":
+          comparison = a.toolPattern.localeCompare(b.toolPattern)
+          break
+        case "riskLevel":
+          comparison = (riskWeight[a.riskLevel] || 0) - (riskWeight[b.riskLevel] || 0)
+          break
+        case "permission":
+          comparison = a.permission.localeCompare(b.permission)
+          break
+      }
+      return sortOrder === "asc" ? comparison : -comparison
+    })
+  }, [filteredRules, sortKey, sortOrder])
+
+  const paginatedRules = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return sortedRules.slice(start, start + pageSize)
+  }, [sortedRules, currentPage, pageSize])
+
   const getRiskBadge = (risk: ToolRule["riskLevel"]) => {
     switch (risk) {
       case "critical":
@@ -314,7 +370,7 @@ export function SecurityView() {
   }
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       {/* Security Posture Banner */}
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
@@ -338,24 +394,26 @@ export function SecurityView() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={handleRunSecurityAudit}
             disabled={isAuditing}
-            className="cursor-pointer gap-1.5 text-xs h-8"
+            className="cursor-pointer gap-1.5 text-xs h-8 px-2 sm:px-3"
+            title="Audit Security Defenses"
           >
             <RotateCwIcon className={`size-3.5 ${isAuditing ? "animate-spin" : ""}`} />
-            <span>{isAuditing ? "Auditing..." : "Audit Defenses"}</span>
+            <span className="hidden sm:inline">{isAuditing ? "Auditing..." : "Audit Defenses"}</span>
           </Button>
           <Button
             size="sm"
             onClick={() => toast.success("Security Policies Synced")}
-            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground text-xs font-medium h-8"
+            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground text-xs font-medium h-8 px-2 sm:px-3"
+            title="Apply Policies"
           >
             <SaveIcon className="size-3.5" />
-            <span>Apply Policies</span>
+            <span className="hidden sm:inline">Apply Policies</span>
           </Button>
         </div>
       </div>
@@ -439,7 +497,7 @@ export function SecurityView() {
 
       {/* Tabs Navigation */}
       <Tabs defaultValue="tools" className="w-full space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-9">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto p-1 gap-1">
           <TabsTrigger value="tools" className="cursor-pointer gap-1.5 text-xs">
             <WrenchIcon className="size-3.5" />
             <span>Tool Permissions (RBAC)</span>
@@ -517,11 +575,27 @@ export function SecurityView() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-t hover:bg-transparent">
-                    <TableHead className="w-[110px] text-xs font-semibold">Server</TableHead>
-                    <TableHead className="w-[180px] text-xs font-semibold">Tool Pattern</TableHead>
+                    <TableHead className="w-[110px] text-xs font-semibold">
+                      <TableSortHeader column="server" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                        Server
+                      </TableSortHeader>
+                    </TableHead>
+                    <TableHead className="w-[180px] text-xs font-semibold">
+                      <TableSortHeader column="toolPattern" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                        Tool Pattern
+                      </TableSortHeader>
+                    </TableHead>
                     <TableHead className="text-xs font-semibold">Description</TableHead>
-                    <TableHead className="w-[90px] text-xs font-semibold">Risk Level</TableHead>
-                    <TableHead className="w-[190px] text-right text-xs font-semibold">Authorization Policy</TableHead>
+                    <TableHead className="w-[90px] text-xs font-semibold">
+                      <TableSortHeader column="riskLevel" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                        Risk Level
+                      </TableSortHeader>
+                    </TableHead>
+                    <TableHead className="w-[190px] text-right text-xs font-semibold">
+                      <TableSortHeader column="permission" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort} align="right">
+                        Authorization Policy
+                      </TableSortHeader>
+                    </TableHead>
                     <TableHead className="w-[50px] text-center text-xs font-semibold">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -586,7 +660,7 @@ export function SecurityView() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredRules.map((rule) => {
+                    paginatedRules.map((rule) => {
                       const riskBadge = getRiskBadge(rule.riskLevel)
                       return (
                         <TableRow key={rule.id} className="hover:bg-muted/30 transition-colors">
@@ -652,6 +726,15 @@ export function SecurityView() {
                   )}
                 </TableBody>
               </Table>
+
+              <TablePagination
+                currentPage={currentPage}
+                pageSize={pageSize}
+                totalItems={sortedRules.length}
+                pageSizeOptions={[5, 10, 20, 50]}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
             </CardContent>
             <CardFooter className="flex flex-wrap items-center justify-between border-t border-border/40 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">

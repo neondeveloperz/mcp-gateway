@@ -45,6 +45,8 @@ import {
   LockIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { TablePagination } from "@/components/ui/table-pagination"
+import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
 import {
   fetchDiscoveredServers,
   fetchDiscoveredTools,
@@ -63,6 +65,13 @@ export function ServersView() {
   const [search, setSearch] = React.useState("")
   const [transportFilter, setTransportFilter] = React.useState<string>("all")
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
+
+  // Sorting & Pagination State
+  type ServerSortKey = "name" | "transport" | "target" | "status" | "tools" | "latency"
+  const [sortKey, setSortKey] = React.useState<ServerSortKey | null>("name")
+  const [sortOrder, setSortOrder] = React.useState<SortOrder>("asc")
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(10)
   const [isAddOpen, setIsAddOpen] = React.useState(false)
   const [pingingId, setPingingId] = React.useState<string | null>(null)
 
@@ -109,12 +118,13 @@ export function ServersView() {
   }, [syncToolsCount])
 
   React.useEffect(() => {
+    loadServers()
     const unsubscribe = subscribeToServers((updated) => {
       setServers(updated)
       syncToolsCount(updated)
     })
     return unsubscribe
-  }, [syncToolsCount])
+  }, [loadServers, syncToolsCount])
 
   const filteredServers = servers.filter((srv) => {
     const matchSearch =
@@ -126,6 +136,62 @@ export function ServersView() {
     const matchStatus = statusFilter === "all" || srv.status === statusFilter
     return matchSearch && matchTransport && matchStatus
   })
+
+  const handleSort = (column: ServerSortKey) => {
+    if (sortKey === column) {
+      if (sortOrder === "asc") setSortOrder("desc")
+      else if (sortOrder === "desc") {
+        setSortKey(null)
+        setSortOrder(null)
+      }
+    } else {
+      setSortKey(column)
+      setSortOrder("asc")
+    }
+    setCurrentPage(1)
+  }
+
+  const sortedServers = React.useMemo(() => {
+    if (!sortKey || !sortOrder) return filteredServers
+    return [...filteredServers].sort((a, b) => {
+      let comparison = 0
+      switch (sortKey) {
+        case "name":
+          comparison = a.name.localeCompare(b.name)
+          break
+        case "transport":
+          comparison = a.transport.localeCompare(b.transport)
+          break
+        case "target": {
+          const targetA = a.command || a.url || ""
+          const targetB = b.command || b.url || ""
+          comparison = targetA.localeCompare(targetB)
+          break
+        }
+        case "status":
+          comparison = a.status.localeCompare(b.status)
+          break
+        case "tools": {
+          const countA = toolsCountMap[a.name] ?? a.toolsCount ?? 0
+          const countB = toolsCountMap[b.name] ?? b.toolsCount ?? 0
+          comparison = countA - countB
+          break
+        }
+        case "latency": {
+          const latA = a.latencyMs ?? 99999
+          const latB = b.latencyMs ?? 99999
+          comparison = latA - latB
+          break
+        }
+      }
+      return sortOrder === "asc" ? comparison : -comparison
+    })
+  }, [filteredServers, sortKey, sortOrder, toolsCountMap])
+
+  const paginatedServers = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return sortedServers.slice(start, start + pageSize)
+  }, [sortedServers, currentPage, pageSize])
 
   const onlineCount = servers.filter((s) => s.status === "online").length
   const stdioCount = servers.filter((s) => s.transport === "stdio").length
@@ -148,12 +214,13 @@ export function ServersView() {
             // ignore
           }
         }
+        const latency = typeof res.latencyMs === "number" && !isNaN(res.latencyMs) ? res.latencyMs : 1
         toast.success(`Ping Succeeded for ${server.name}`, {
-          description: `Latency: ${res.latencyMs}ms · Discovered: ${toolsFound} Tools`,
+          description: `Latency: ${latency}ms · Discovered: ${toolsFound} Tools`,
         })
         const updated = servers.map((s) =>
           s.id === server.id
-            ? { ...s, status: "online" as const, latencyMs: res.latencyMs, toolsCount: toolsFound }
+            ? { ...s, status: "online" as const, latencyMs: latency, toolsCount: toolsFound }
             : s
         )
         setServers(updated)
@@ -317,7 +384,7 @@ export function ServersView() {
   }
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 w-full">
+    <div className="flex flex-col gap-5 p-4 md:p-6 w-full min-w-0 max-w-full">
       {/* Top Banner */}
       <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-4">
@@ -341,24 +408,26 @@ export function ServersView() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <Button
             size="sm"
             onClick={() => setIsAddOpen(true)}
-            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium text-xs h-8"
+            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground font-medium text-xs h-8 px-2 sm:px-3"
+            title="Add MCP Server"
           >
             <PlusIcon className="size-3.5" />
-            <span>Add MCP Server</span>
+            <span className="hidden sm:inline">Add MCP Server</span>
           </Button>
 
           <Button
             variant="outline"
             size="sm"
             onClick={handleExportMcpConfig}
-            className="cursor-pointer gap-1.5 text-xs h-8"
+            className="cursor-pointer gap-1.5 text-xs h-8 px-2 sm:px-3"
+            title="Export mcp.json"
           >
             <DownloadIcon className="size-3.5" />
-            <span>Export mcp.json</span>
+            <span className="hidden sm:inline">Export mcp.json</span>
           </Button>
 
           <Button
@@ -485,17 +554,41 @@ export function ServersView() {
             <Table>
               <TableHeader>
                 <TableRow className="border-t hover:bg-transparent">
-                  <TableHead className="w-48 text-xs font-semibold">Server Name</TableHead>
-                  <TableHead className="w-28 text-xs font-semibold">Transport</TableHead>
-                  <TableHead className="text-xs font-semibold">Target / Command</TableHead>
-                  <TableHead className="w-28 text-xs font-semibold">Status</TableHead>
-                  <TableHead className="w-24 text-xs font-semibold">Tools</TableHead>
-                  <TableHead className="w-24 text-xs font-semibold">Latency</TableHead>
+                  <TableHead className="w-48 text-xs font-semibold">
+                    <TableSortHeader column="name" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Server Name
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-28 text-xs font-semibold">
+                    <TableSortHeader column="transport" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Transport
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold">
+                    <TableSortHeader column="target" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Target / Command
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-28 text-xs font-semibold">
+                    <TableSortHeader column="status" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Status
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-24 text-xs font-semibold">
+                    <TableSortHeader column="tools" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Tools
+                    </TableSortHeader>
+                  </TableHead>
+                  <TableHead className="w-24 text-xs font-semibold">
+                    <TableSortHeader column="latency" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                      Latency
+                    </TableSortHeader>
+                  </TableHead>
                   <TableHead className="w-44 text-right text-xs font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredServers.length === 0 ? (
+                {sortedServers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="py-16 text-center text-xs text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
@@ -516,7 +609,7 @@ export function ServersView() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredServers.map((server) => {
+                  paginatedServers.map((server) => {
                     const isPinging = pingingId === server.id
                     return (
                       <TableRow key={server.id} className="hover:bg-muted/30 transition-colors">
@@ -593,7 +686,7 @@ export function ServersView() {
                         </TableCell>
                         <TableCell className="font-mono text-xs">
                           <Badge variant="outline" className="border-border/60 text-muted-foreground text-[10px]">
-                            {toolsCountMap[server.name] ?? server.toolsCount ?? 0} Tools
+                            {toolsCountMap[server.name] || server.toolsCount || 0} Tools
                           </Badge>
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
@@ -610,7 +703,7 @@ export function ServersView() {
                               title="Ping Server"
                             >
                               <RotateCwIcon className={`size-3 ${isPinging ? "animate-spin" : ""}`} />
-                              <span>Ping</span>
+                              <span className="hidden sm:inline">Ping</span>
                             </Button>
 
                             <Button
@@ -625,7 +718,7 @@ export function ServersView() {
                               ) : (
                                 <PlayIcon className="size-3 text-emerald-400" />
                               )}
-                              <span>{server.status === "online" ? "Standby" : "Start"}</span>
+                              <span className="hidden sm:inline">{server.status === "online" ? "Standby" : "Start"}</span>
                             </Button>
 
                             <Button
@@ -646,10 +739,19 @@ export function ServersView() {
               </TableBody>
             </Table>
           </div>
+
+          <TablePagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalItems={sortedServers.length}
+            pageSizeOptions={[5, 10, 20, 50]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
         <CardFooter className="flex items-center justify-between border-t border-border/40 text-xs text-muted-foreground">
           <span>Real-time child process health verification enabled</span>
-          <span>Showing {filteredServers.length} servers</span>
+          <span>{filteredServers.length} servers total</span>
         </CardFooter>
       </Card>
 

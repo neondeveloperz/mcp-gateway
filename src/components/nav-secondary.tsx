@@ -40,7 +40,7 @@ export function NavSecondary({
                   className="cursor-pointer"
                 >
                   {item.icon}
-                  <span>{item.title}</span>
+                  <span className="group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:hidden">{item.title}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )

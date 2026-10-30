@@ -31,6 +31,8 @@ import {
   LockIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { TablePagination } from "@/components/ui/table-pagination"
+import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
 
 export interface TokenItem {
   id: string
@@ -99,6 +101,60 @@ export function TokenManager() {
   // Last created token modal / banner
   const [newlyCreatedToken, setNewlyCreatedToken] = React.useState<string | null>(null)
   const [copiedId, setCopiedId] = React.useState<string | null>(null)
+
+  // Sorting & Pagination
+  type TokenSortKey = "name" | "token" | "scope" | "expiresAt" | "lastUsed" | "status"
+  const [sortKey, setSortKey] = React.useState<TokenSortKey | null>("name")
+  const [sortOrder, setSortOrder] = React.useState<SortOrder>("asc")
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(5)
+
+  const handleSort = (column: TokenSortKey) => {
+    if (sortKey === column) {
+      if (sortOrder === "asc") setSortOrder("desc")
+      else if (sortOrder === "desc") {
+        setSortKey(null)
+        setSortOrder(null)
+      }
+    } else {
+      setSortKey(column)
+      setSortOrder("asc")
+    }
+    setCurrentPage(1)
+  }
+
+  const sortedTokens = React.useMemo(() => {
+    if (!sortKey || !sortOrder) return tokens
+    return [...tokens].sort((a, b) => {
+      let comparison = 0
+      switch (sortKey) {
+        case "name":
+          comparison = a.name.localeCompare(b.name)
+          break
+        case "token":
+          comparison = a.maskedToken.localeCompare(b.maskedToken)
+          break
+        case "scope":
+          comparison = a.scope.localeCompare(b.scope)
+          break
+        case "expiresAt":
+          comparison = a.expiresAt.localeCompare(b.expiresAt)
+          break
+        case "lastUsed":
+          comparison = a.lastUsed.localeCompare(b.lastUsed)
+          break
+        case "status":
+          comparison = a.status.localeCompare(b.status)
+          break
+      }
+      return sortOrder === "asc" ? comparison : -comparison
+    })
+  }, [tokens, sortKey, sortOrder])
+
+  const paginatedTokens = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return sortedTokens.slice(start, start + pageSize)
+  }, [sortedTokens, currentPage, pageSize])
 
   const saveTokens = (newTokens: TokenItem[]) => {
     setTokens(newTokens)
@@ -206,14 +262,15 @@ export function TokenManager() {
             Generate and manage cryptographic bearer tokens for external AI agents connecting to this gateway
           </CardDescription>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             size="sm"
             onClick={() => setShowGenerator((v) => !v)}
-            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground text-xs font-medium"
+            className="cursor-pointer gap-1.5 bg-primary text-primary-foreground text-xs font-medium px-2 sm:px-3"
+            title={showGenerator ? "Cancel" : "Generate New Token"}
           >
             {showGenerator ? <LockIcon className="size-3.5" /> : <PlusIcon className="size-3.5" />}
-            <span>{showGenerator ? "Cancel" : "Generate New Token"}</span>
+            <span className="hidden sm:inline">{showGenerator ? "Cancel" : "Generate New Token"}</span>
           </Button>
         </div>
       </CardHeader>
@@ -342,24 +399,48 @@ export function TokenManager() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-48 text-xs font-semibold">Name / Client</TableHead>
-                <TableHead className="w-56 text-xs font-semibold">Token Key</TableHead>
-                <TableHead className="w-32 text-xs font-semibold">Scope</TableHead>
-                <TableHead className="w-28 text-xs font-semibold">Expires</TableHead>
-                <TableHead className="w-28 text-xs font-semibold">Last Used</TableHead>
-                <TableHead className="w-24 text-xs font-semibold">Status</TableHead>
+                <TableHead className="w-48 text-xs font-semibold">
+                  <TableSortHeader column="name" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                    Name / Client
+                  </TableSortHeader>
+                </TableHead>
+                <TableHead className="w-56 text-xs font-semibold">
+                  <TableSortHeader column="token" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                    Token Key
+                  </TableSortHeader>
+                </TableHead>
+                <TableHead className="w-32 text-xs font-semibold">
+                  <TableSortHeader column="scope" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                    Scope
+                  </TableSortHeader>
+                </TableHead>
+                <TableHead className="w-28 text-xs font-semibold">
+                  <TableSortHeader column="expiresAt" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                    Expires
+                  </TableSortHeader>
+                </TableHead>
+                <TableHead className="w-28 text-xs font-semibold">
+                  <TableSortHeader column="lastUsed" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                    Last Used
+                  </TableSortHeader>
+                </TableHead>
+                <TableHead className="w-24 text-xs font-semibold">
+                  <TableSortHeader column="status" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                    Status
+                  </TableSortHeader>
+                </TableHead>
                 <TableHead className="w-24 text-right text-xs font-semibold">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tokens.length === 0 ? (
+              {sortedTokens.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="h-24 text-center text-xs text-muted-foreground">
                     No tokens created yet. Click "Generate New Token" above.
                   </TableCell>
                 </TableRow>
               ) : (
-                tokens.map((item) => {
+                paginatedTokens.map((item) => {
                   const scopeBadge = getScopeBadge(item.scope)
                   const isActive = item.status === "active"
                   return (
@@ -450,6 +531,15 @@ export function TokenManager() {
               )}
             </TableBody>
           </Table>
+
+          <TablePagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalItems={sortedTokens.length}
+            pageSizeOptions={[5, 10, 20]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
 
         <div className="flex flex-wrap items-center justify-between text-[11px] text-muted-foreground pt-1">

@@ -44,9 +44,9 @@ export function NavDocuments({
                 className="cursor-pointer"
               >
                 {item.icon}
-                <span className="flex-1 truncate">{item.name}</span>
+                <span className="flex-1 truncate group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:hidden">{item.name}</span>
                 {item.badge != null && (
-                  <span className="ml-auto shrink-0 group-data-[collapsible=icon]:hidden">
+                  <span className="ml-auto shrink-0 group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:hidden">
                     <MenuBadge badge={item.badge} variant={item.badgeVariant} />
                   </span>
                 )}

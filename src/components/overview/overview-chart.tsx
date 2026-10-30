@@ -62,18 +62,18 @@ export function OverviewChart() {
   }, [refreshChart])
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <div>
+    <Card className="flex flex-col min-w-0">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4">
+        <div className="min-w-0">
           <CardTitle className="flex items-center gap-2 text-base font-semibold">
-            <ActivityIcon className="size-4 text-primary" />
-            Gateway Activity & Latency
+            <ActivityIcon className="size-4 text-primary shrink-0" />
+            <span>Gateway Activity & Latency</span>
           </CardTitle>
-          <CardDescription className="text-xs">
+          <CardDescription className="text-xs truncate">
             Live JSON-RPC calls and roundtrip response latency across all attached servers
           </CardDescription>
         </div>
-        <CardAction>
+        <CardAction className="shrink-0">
           <ToggleGroup
             value={[metric]}
             onValueChange={(val) => {

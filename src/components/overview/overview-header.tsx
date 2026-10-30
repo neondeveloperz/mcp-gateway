@@ -62,14 +62,14 @@ export function OverviewHeader({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border bg-card/60 p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between">
-      <div className="flex items-start gap-4">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
-          <RadioIcon className="size-6 text-emerald-500 animate-pulse" />
+    <div className="flex flex-col gap-4 rounded-xl border bg-card/60 p-4 sm:p-5 shadow-xs backdrop-blur-xs md:flex-row md:items-center md:justify-between min-w-0">
+      <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+        <div className="flex size-10 sm:size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+          <RadioIcon className="size-5 sm:size-6 text-emerald-500 animate-pulse" />
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold tracking-tight">MCP Gateway Core</h2>
+            <h2 className="text-base sm:text-lg font-semibold tracking-tight">MCP Gateway Core</h2>
             <Badge variant="outline" className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-500 font-medium text-xs">
               <span className="size-1.5 rounded-full bg-emerald-500" />
               Engine Online
@@ -78,46 +78,49 @@ export function OverviewHeader({
               v0.1.0 · Protocol 2024-11-05
             </Badge>
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <ShieldCheckIcon className="size-3.5 text-primary" />
               TLS & Token Guard Active
             </span>
-            <span>•</span>
-            <span className="font-mono text-foreground/80">{endpointUrl}</span>
-            <span>•</span>
+            <span className="hidden sm:inline">•</span>
+            <span className="font-mono text-foreground/80 break-all">{endpointUrl}</span>
+            <span className="hidden sm:inline">•</span>
             <span>{activeTokensCount} Authorized Client Session{activeTokensCount === 1 ? "" : "s"}</span>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-2 md:pt-0 shrink-0">
         <Button
           variant="outline"
           size="sm"
           onClick={handleCopyEndpoint}
-          className="cursor-pointer gap-1.5 font-mono text-xs"
+          className="cursor-pointer gap-1.5 font-mono text-xs px-2 sm:px-3"
+          title={copied ? "Copied" : "Copy SSE Endpoint"}
         >
           {copied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5" />}
-          <span>{copied ? "Copied" : "Copy SSE"}</span>
+          <span className="hidden sm:inline">{copied ? "Copied" : "Copy SSE"}</span>
         </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={handleRestart}
           disabled={isRestarting}
-          className="cursor-pointer gap-1.5 text-xs"
+          className="cursor-pointer gap-1.5 text-xs px-2 sm:px-3"
+          title="Restart Gateway Engine"
         >
           <RotateCwIcon className={`size-3.5 ${isRestarting ? "animate-spin" : ""}`} />
-          <span>Restart</span>
+          <span className="hidden sm:inline">Restart</span>
         </Button>
         <Button
           size="sm"
           onClick={onAddServer ?? (() => onNavigate?.("servers"))}
-          className="cursor-pointer gap-1.5 bg-primary text-primary-foreground text-xs font-medium"
+          className="cursor-pointer gap-1.5 bg-primary text-primary-foreground text-xs font-medium px-2 sm:px-3"
+          title="Add Server"
         >
           <PlusIcon className="size-3.5" />
-          <span>Add Server</span>
+          <span className="hidden sm:inline">Add Server</span>
         </Button>
       </div>
     </div>

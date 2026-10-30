@@ -29,12 +29,21 @@ import {
   RotateCwIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { TablePagination } from "@/components/ui/table-pagination"
+import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
 import { getRpcLogs, type RpcLog } from "@/lib/mcp-service"
 
 export function OverviewRecentCalls({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const [calls, setCalls] = React.useState<RpcLog[]>([])
   const [search, setSearch] = React.useState("")
   const [filterMethod, setFilterMethod] = React.useState<string>("all")
+
+  // Sorting & Pagination
+  type OverviewCallSortKey = "time" | "method" | "server" | "latency" | "status"
+  const [sortKey, setSortKey] = React.useState<OverviewCallSortKey | null>("time")
+  const [sortOrder, setSortOrder] = React.useState<SortOrder>("desc")
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(5)
 
   const refreshLogs = React.useCallback(() => {
     setCalls(getRpcLogs())
@@ -55,6 +64,50 @@ export function OverviewRecentCalls({ onNavigate }: { onNavigate?: (tab: string)
     const matchMethod = filterMethod === "all" || call.method === filterMethod
     return matchSearch && matchMethod
   })
+
+  const handleSort = (column: OverviewCallSortKey) => {
+    if (sortKey === column) {
+      if (sortOrder === "asc") setSortOrder("desc")
+      else if (sortOrder === "desc") {
+        setSortKey(null)
+        setSortOrder(null)
+      }
+    } else {
+      setSortKey(column)
+      setSortOrder("asc")
+    }
+    setCurrentPage(1)
+  }
+
+  const sortedCalls = React.useMemo(() => {
+    if (!sortKey || !sortOrder) return filtered
+    return [...filtered].sort((a, b) => {
+      let comparison = 0
+      switch (sortKey) {
+        case "time":
+          comparison = a.time.localeCompare(b.time)
+          break
+        case "method":
+          comparison = a.method.localeCompare(b.method)
+          break
+        case "server":
+          comparison = a.server.localeCompare(b.server)
+          break
+        case "latency":
+          comparison = a.latencyMs - b.latencyMs
+          break
+        case "status":
+          comparison = a.status.localeCompare(b.status)
+          break
+      }
+      return sortOrder === "asc" ? comparison : -comparison
+    })
+  }, [filtered, sortKey, sortOrder])
+
+  const paginatedCalls = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return sortedCalls.slice(start, start + pageSize)
+  }, [sortedCalls, currentPage, pageSize])
 
   const getMethodBadge = (method: string) => {
     switch (method) {
@@ -80,18 +133,18 @@ export function OverviewRecentCalls({ onNavigate }: { onNavigate?: (tab: string)
   }
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader className="flex flex-col gap-3 pb-3 md:flex-row md:items-center md:justify-between">
-        <div>
+    <Card className="flex flex-col min-w-0">
+      <CardHeader className="flex flex-col gap-3 pb-3 md:flex-row md:items-center md:justify-between min-w-0">
+        <div className="min-w-0">
           <CardTitle className="flex items-center gap-2 text-base font-semibold">
-            <TerminalIcon className="size-4 text-primary" />
-            Live JSON-RPC Traffic Log ({calls.length})
+            <TerminalIcon className="size-4 text-primary shrink-0" />
+            <span>Live JSON-RPC Traffic Log ({calls.length})</span>
           </CardTitle>
-          <CardDescription className="text-xs">
+          <CardDescription className="text-xs truncate">
             Live request execution logs recorded from real agent and server traffic
           </CardDescription>
         </div>
-        <CardAction className="flex flex-wrap items-center gap-2">
+        <CardAction className="flex flex-wrap items-center gap-2 shrink-0">
           <Button
             variant="ghost"
             size="sm"
@@ -134,8 +187,9 @@ export function OverviewRecentCalls({ onNavigate }: { onNavigate?: (tab: string)
             size="sm"
             onClick={() => onNavigate?.("logs")}
             className="cursor-pointer gap-1 text-xs text-primary hover:text-primary h-7 px-2"
+            title="View Live Stream"
           >
-            <span>Live Stream</span>
+            <span className="hidden sm:inline">Live Stream</span>
             <ArrowRightIcon className="size-3.5" />
           </Button>
         </CardAction>
@@ -145,23 +199,43 @@ export function OverviewRecentCalls({ onNavigate }: { onNavigate?: (tab: string)
           <Table>
             <TableHeader>
               <TableRow className="border-t hover:bg-transparent">
-                <TableHead className="w-24 text-xs font-semibold">Time</TableHead>
-                <TableHead className="w-32 text-xs font-semibold">Method</TableHead>
-                <TableHead className="text-xs font-semibold">Target Server</TableHead>
+                <TableHead className="w-24 text-xs font-semibold">
+                  <TableSortHeader column="time" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                    Time
+                  </TableSortHeader>
+                </TableHead>
+                <TableHead className="w-32 text-xs font-semibold">
+                  <TableSortHeader column="method" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                    Method
+                  </TableSortHeader>
+                </TableHead>
+                <TableHead className="text-xs font-semibold">
+                  <TableSortHeader column="server" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort}>
+                    Target Server
+                  </TableSortHeader>
+                </TableHead>
                 <TableHead className="text-xs font-semibold">Function / URI / Endpoint</TableHead>
-                <TableHead className="w-24 text-right text-xs font-semibold">Latency</TableHead>
-                <TableHead className="w-28 text-right text-xs font-semibold">Status</TableHead>
+                <TableHead className="w-24 text-right text-xs font-semibold">
+                  <TableSortHeader column="latency" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort} align="right">
+                    Latency
+                  </TableSortHeader>
+                </TableHead>
+                <TableHead className="w-28 text-right text-xs font-semibold">
+                  <TableSortHeader column="status" currentSort={sortKey} sortOrder={sortOrder} onSort={handleSort} align="right">
+                    Status
+                  </TableSortHeader>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {sortedCalls.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-20 text-center text-xs text-muted-foreground">
                     No traffic logs recorded yet.
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((call) => (
+                paginatedCalls.map((call) => (
                   <TableRow
                     key={call.id}
                     onClick={() => handleInspect(call)}
@@ -206,6 +280,15 @@ export function OverviewRecentCalls({ onNavigate }: { onNavigate?: (tab: string)
             </TableBody>
           </Table>
         </div>
+
+        <TablePagination
+          currentPage={currentPage}
+          pageSize={pageSize}
+          totalItems={sortedCalls.length}
+          pageSizeOptions={[5, 10, 20]}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
       </CardContent>
     </Card>
   )
