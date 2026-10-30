@@ -219,6 +219,14 @@ pub fn get_ide_integration_status() -> Vec<IdeIntegrationStatus> {
 }
 
 #[tauri::command]
-pub fn sync_ide_config(ide_id: String) -> Result<String, String> {
-    sync_ide_config_internal(&ide_id, 8080)
+pub fn sync_ide_config(
+    ide: Option<String>,
+    ide_id: Option<String>,
+    port: Option<u16>,
+) -> Result<String, String> {
+    let target_ide = ide
+        .or(ide_id)
+        .ok_or_else(|| "Missing required parameter 'ide'".to_string())?;
+    let target_port = port.unwrap_or(8080);
+    sync_ide_config_internal(&target_ide, target_port)
 }

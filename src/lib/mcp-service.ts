@@ -1131,7 +1131,7 @@ export async function fetchIdeStatuses(): Promise<IdeStatus[]> {
 
 export async function syncIdeConfig(ide: string, port = 8080): Promise<string> {
   if (isTauri()) {
-    return await invoke<string>("sync_ide_config", { ide, port })
+    return await invoke<string>("sync_ide_config", { ide, ideId: ide, port })
   }
   return `Configured ${ide} MCP gateway on port ${port}`
 }
