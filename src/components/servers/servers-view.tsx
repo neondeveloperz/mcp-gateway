@@ -47,15 +47,19 @@ import {
 import { toast } from "sonner"
 import {
   fetchDiscoveredServers,
+  fetchDiscoveredTools,
+  fetchRemoteTools,
   pingServer,
   saveServers,
   addCustomServer,
   deleteCustomServer,
+  subscribeToServers,
   type McpServer,
 } from "@/lib/mcp-service"
 
 export function ServersView() {
   const [servers, setServers] = React.useState<McpServer[]>([])
+  const [toolsCountMap, setToolsCountMap] = React.useState<Record<string, number>>({})
   const [search, setSearch] = React.useState("")
   const [transportFilter, setTransportFilter] = React.useState<string>("all")
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
@@ -72,14 +76,45 @@ export function ServersView() {
   const [newAuthToken, setNewAuthToken] = React.useState("")
   const [newCustomHeaders, setNewCustomHeaders] = React.useState("")
 
+  const syncToolsCount = React.useCallback(async (serverList: McpServer[]) => {
+    try {
+      const allTools = await fetchDiscoveredTools()
+      const counts: Record<string, number> = {}
+      allTools.forEach((t) => {
+        counts[t.server] = (counts[t.server] || 0) + 1
+      })
+      setToolsCountMap(counts)
+
+      let changed = false
+      const updated = serverList.map((srv) => {
+        const count = counts[srv.name] ?? srv.toolsCount ?? 0
+        if (srv.toolsCount !== count) {
+          changed = true
+          return { ...srv, toolsCount: count }
+        }
+        return srv
+      })
+      if (changed) {
+        saveServers(updated)
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
   const loadServers = React.useCallback(async () => {
     const list = await fetchDiscoveredServers()
     setServers(list)
-  }, [])
+    await syncToolsCount(list)
+  }, [syncToolsCount])
 
   React.useEffect(() => {
-    loadServers()
-  }, [loadServers])
+    const unsubscribe = subscribeToServers((updated) => {
+      setServers(updated)
+      syncToolsCount(updated)
+    })
+    return unsubscribe
+  }, [syncToolsCount])
 
   const filteredServers = servers.filter((srv) => {
     const matchSearch =
@@ -101,11 +136,25 @@ export function ServersView() {
     try {
       const res = await pingServer(server)
       if (res.success) {
+        let toolsFound = toolsCountMap[server.name] ?? server.toolsCount ?? 0
+        if (server.url) {
+          try {
+            const remoteTools = await fetchRemoteTools(server)
+            if (remoteTools.length > 0) {
+              toolsFound = remoteTools.length
+              setToolsCountMap((prev) => ({ ...prev, [server.name]: toolsFound }))
+            }
+          } catch {
+            // ignore
+          }
+        }
         toast.success(`Ping Succeeded for ${server.name}`, {
-          description: `Latency: ${res.latencyMs}ms · ${res.message}`,
+          description: `Latency: ${res.latencyMs}ms · Discovered: ${toolsFound} Tools`,
         })
         const updated = servers.map((s) =>
-          s.id === server.id ? { ...s, status: "online" as const, latencyMs: res.latencyMs } : s
+          s.id === server.id
+            ? { ...s, status: "online" as const, latencyMs: res.latencyMs, toolsCount: toolsFound }
+            : s
         )
         setServers(updated)
         saveServers(updated)
@@ -202,7 +251,6 @@ export function ServersView() {
       authToken: newAuthToken.trim() || undefined,
     })
 
-    setServers([created, ...servers])
     setIsAddOpen(false)
     setNewName("")
     setNewCommand("")
@@ -545,7 +593,7 @@ export function ServersView() {
                         </TableCell>
                         <TableCell className="font-mono text-xs">
                           <Badge variant="outline" className="border-border/60 text-muted-foreground text-[10px]">
-                            {server.toolsCount} Tools
+                            {toolsCountMap[server.name] ?? server.toolsCount ?? 0} Tools
                           </Badge>
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">

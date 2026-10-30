@@ -326,8 +326,69 @@ fn get_system_mcp_tools() -> Vec<NativeMcpTool> {
     tools
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GatewayServerConfig {
+    pub id: String,
+    pub name: String,
+    pub transport: String,
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    pub url: Option<String>,
+    #[serde(rename = "authToken")]
+    pub auth_token: Option<String>,
+    pub headers: Option<std::collections::HashMap<String, String>>,
+    pub status: Option<String>,
+}
+
+fn get_gateway_servers_path() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".mcp_gateway").join("servers.json"))
+}
+
+fn load_configured_servers() -> Vec<GatewayServerConfig> {
+    if let Some(path) = get_gateway_servers_path() {
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(servers) = serde_json::from_str::<Vec<GatewayServerConfig>>(&content) {
+                    if !servers.is_empty() {
+                        return servers;
+                    }
+                }
+            }
+        }
+    }
+    vec![GatewayServerConfig {
+        id: "srv-coolify".to_string(),
+        name: "Coolify".to_string(),
+        transport: "http".to_string(),
+        command: String::new(),
+        args: Vec::new(),
+        url: Some("http://45.136.237.171:8000/mcp".to_string()),
+        auth_token: Some("6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded".to_string()),
+        headers: None,
+        status: Some("online".to_string()),
+    }]
+}
+
 #[tauri::command]
-fn execute_remote_mcp(url: String, auth_token: Option<String>, payload: String) -> Result<String, String> {
+fn save_gateway_servers(servers_json: String) -> Result<(), String> {
+    if let Some(path) = get_gateway_servers_path() {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(&path, servers_json).map_err(|e| format!("Failed to write servers file: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn execute_remote_mcp(
+    url: String,
+    auth_token: Option<String>,
+    headers: Option<std::collections::HashMap<String, String>>,
+    payload: String,
+) -> Result<String, String> {
     let mut cmd = Command::new("curl");
     cmd.arg("-s")
         .arg("-m")
@@ -337,14 +398,26 @@ fn execute_remote_mcp(url: String, auth_token: Option<String>, payload: String) 
         .arg("-H")
         .arg("Content-Type: application/json");
 
-    if let Some(token) = auth_token {
-        if !token.is_empty() {
-            let auth_header = if token.starts_with("Bearer ") {
-                token
-            } else {
-                format!("Bearer {}", token)
-            };
-            cmd.arg("-H").arg(format!("Authorization: {}", auth_header));
+    let mut has_auth = false;
+    if let Some(hdrs) = headers {
+        for (k, v) in hdrs {
+            if k.eq_ignore_ascii_case("authorization") {
+                has_auth = true;
+            }
+            cmd.arg("-H").arg(format!("{}: {}", k, v));
+        }
+    }
+
+    if !has_auth {
+        if let Some(token) = auth_token {
+            if !token.is_empty() {
+                let auth_header = if token.starts_with("Bearer ") {
+                    token
+                } else {
+                    format!("Bearer {}", token)
+                };
+                cmd.arg("-H").arg(format!("Authorization: {}", auth_header));
+            }
         }
     }
 
@@ -432,26 +505,32 @@ fn handle_json_rpc(body_str: &str) -> serde_json::Value {
             })
         }
         "tools/list" => {
-            let payload = serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": format!("tools-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)),
-                "method": "tools/list",
-                "params": {}
-            }).to_string();
+            let servers = load_configured_servers();
+            let mut all_tools: Vec<serde_json::Value> = Vec::new();
 
-            let coolify_url = "http://45.136.237.171:8000/mcp".to_string();
-            let coolify_token = Some("6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded".to_string());
+            for srv in servers {
+                if srv.status.as_deref() == Some("standby") {
+                    continue;
+                }
+                if let Some(url) = srv.url {
+                    if url.is_empty() {
+                        continue;
+                    }
+                    let payload = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": format!("tools-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)),
+                        "method": "tools/list",
+                        "params": {}
+                    }).to_string();
 
-            if let Ok(res_str) = execute_remote_mcp(coolify_url, coolify_token, payload) {
-                if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
-                    if let Some(tools) = downstream_json.get("result").and_then(|r| r.get("tools")) {
-                        return serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": id,
-                            "result": {
-                                "tools": tools
+                    if let Ok(res_str) = execute_remote_mcp(url, srv.auth_token, srv.headers, payload) {
+                        if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
+                            if let Some(tools_arr) = downstream_json.get("result").and_then(|r| r.get("tools")).and_then(|t| t.as_array()) {
+                                for t in tools_arr {
+                                    all_tools.push(t.clone());
+                                }
                             }
-                        });
+                        }
                     }
                 }
             }
@@ -459,7 +538,9 @@ fn handle_json_rpc(body_str: &str) -> serde_json::Value {
             serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": id,
-                "result": { "tools": [] }
+                "result": {
+                    "tools": all_tools
+                }
             })
         }
         "tools/call" => {
@@ -476,31 +557,45 @@ fn handle_json_rpc(body_str: &str) -> serde_json::Value {
                 }
             }).to_string();
 
-            let coolify_url = "http://45.136.237.171:8000/mcp".to_string();
-            let coolify_token = Some("6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded".to_string());
+            let servers = load_configured_servers();
+            let mut last_error: Option<serde_json::Value> = None;
 
-            if let Ok(res_str) = execute_remote_mcp(coolify_url, coolify_token, payload) {
-                if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
-                    if let Some(res) = downstream_json.get("result") {
-                        return serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": id,
-                            "result": res
-                        });
-                    } else if let Some(err) = downstream_json.get("error") {
-                        return serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": id,
-                            "error": err
-                        });
+            for srv in servers {
+                if srv.status.as_deref() == Some("standby") {
+                    continue;
+                }
+                if let Some(url) = srv.url {
+                    if url.is_empty() {
+                        continue;
+                    }
+                    if let Ok(res_str) = execute_remote_mcp(url, srv.auth_token, srv.headers, payload.clone()) {
+                        if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
+                            if let Some(res) = downstream_json.get("result") {
+                                return serde_json::json!({
+                                    "jsonrpc": "2.0",
+                                    "id": id,
+                                    "result": res
+                                });
+                            } else if let Some(err) = downstream_json.get("error") {
+                                last_error = Some(err.clone());
+                            }
+                        }
                     }
                 }
+            }
+
+            if let Some(err) = last_error {
+                return serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": err
+                });
             }
 
             serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": id,
-                "error": { "code": -32603, "message": "Failed to execute tool on downstream server" }
+                "error": { "code": -32603, "message": format!("Tool '{}' not found or execution failed on downstream servers", tool_name) }
             })
         }
         _ => {
@@ -671,7 +766,8 @@ pub fn run() {
             discover_mcp_servers,
             ping_mcp_server,
             get_system_mcp_tools,
-            execute_remote_mcp
+            execute_remote_mcp,
+            save_gateway_servers
         ])
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && matches!(payload.event(), PageLoadEvent::Finished) {

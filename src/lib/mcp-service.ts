@@ -120,6 +120,14 @@ export function saveServers(servers: McpServer[]) {
     localStorage.setItem(SERVERS_STORAGE_KEY, JSON.stringify(servers))
     window.dispatchEvent(new CustomEvent(MCP_SERVERS_EVENT, { detail: servers }))
   }
+
+  if (isTauri()) {
+    try {
+      invoke("save_gateway_servers", { serversJson: JSON.stringify(servers) }).catch(() => {})
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export function subscribeToServers(callback: (servers: McpServer[]) => void): () => void {
@@ -387,7 +395,7 @@ interface McpToolsListResponse {
   }
 }
 
-async function fetchRemoteTools(server: McpServer): Promise<McpTool[]> {
+export async function fetchRemoteTools(server: McpServer): Promise<McpTool[]> {
   if (!server.url) return []
   try {
     const payload = JSON.stringify({
@@ -410,6 +418,7 @@ async function fetchRemoteTools(server: McpServer): Promise<McpTool[]> {
         const raw = await invoke<string>("execute_remote_mcp", {
           url: server.url,
           authToken: effectiveToken,
+          headers: server.headers || null,
           payload,
         })
         json = JSON.parse(raw)
@@ -478,9 +487,27 @@ export async function fetchDiscoveredTools(): Promise<McpTool[]> {
 
   // Fetch tools from remote servers dynamically
   const remoteToolsNested = await Promise.all(
-    servers.filter((s) => s.url).map(fetchRemoteTools)
+    servers.filter((s) => s.url).map(async (srv) => {
+      const tools = await fetchRemoteTools(srv)
+      return { server: srv, tools }
+    })
   )
-  const remoteTools = remoteToolsNested.flat()
+
+  // Auto-sync server.toolsCount in localStorage
+  let changed = false
+  const updatedServers = servers.map((srv) => {
+    const entry = remoteToolsNested.find((r) => r.server.id === srv.id)
+    if (entry && entry.tools.length > 0 && srv.toolsCount !== entry.tools.length) {
+      changed = true
+      return { ...srv, toolsCount: entry.tools.length }
+    }
+    return srv
+  })
+  if (changed) {
+    saveServers(updatedServers)
+  }
+
+  const remoteTools = remoteToolsNested.flatMap((r) => r.tools)
 
   // User-defined tools in storage
   let userTools: McpTool[] = []
@@ -703,12 +730,10 @@ export function addCustomServer(newServer: {
   // Dynamically query remote tools count for HTTP / SSE servers
   if (server.url) {
     fetchRemoteTools(server).then((tools) => {
-      if (tools.length > 0) {
-        const fresh: McpServer[] =
-          typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
-        const withCount = fresh.map((s) => (s.id === server.id ? { ...s, toolsCount: tools.length } : s))
-        saveServers(withCount)
-      }
+      const fresh: McpServer[] =
+        typeof window !== "undefined" ? JSON.parse(localStorage.getItem(SERVERS_STORAGE_KEY) || "[]") : []
+      const withCount = fresh.map((s) => (s.id === server.id ? { ...s, toolsCount: tools.length } : s))
+      saveServers(withCount)
     })
   }
 
