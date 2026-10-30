@@ -72,21 +72,6 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   }
 }
 
-const initialCoolifyServer: McpServer = {
-  id: "srv-coolify",
-  name: "Coolify",
-  transport: "http",
-  command: "",
-  args: [],
-  url: "http://45.136.237.171:8000/mcp",
-  authToken: "6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded",
-  source: "Manual Config",
-  status: "online",
-  latencyMs: 12,
-  toolsCount: 77,
-  resourcesCount: 0,
-}
-
 // User-managed servers (Manual configuration only, persists in localStorage)
 export async function fetchDiscoveredServers(): Promise<McpServer[]> {
   if (typeof window !== "undefined") {
@@ -98,19 +83,11 @@ export async function fetchDiscoveredServers(): Promise<McpServer[]> {
           return parsed
         }
       }
-
-      // Check if user has explicitly deleted Coolify
-      const deletedRaw = localStorage.getItem("mcp_gateway_deleted_servers_v4")
-      const deleted: string[] = deletedRaw ? JSON.parse(deletedRaw) : []
-      if (!deleted.includes("Coolify")) {
-        localStorage.setItem(SERVERS_STORAGE_KEY, JSON.stringify([initialCoolifyServer]))
-        return [initialCoolifyServer]
-      }
     } catch {
       // ignore
     }
   }
-  return [initialCoolifyServer]
+  return []
 }
 
 export const MCP_SERVERS_EVENT = "mcp_servers_updated"

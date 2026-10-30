@@ -351,24 +351,12 @@ fn load_configured_servers() -> Vec<GatewayServerConfig> {
         if path.exists() {
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(servers) = serde_json::from_str::<Vec<GatewayServerConfig>>(&content) {
-                    if !servers.is_empty() {
-                        return servers;
-                    }
+                    return servers;
                 }
             }
         }
     }
-    vec![GatewayServerConfig {
-        id: "srv-coolify".to_string(),
-        name: "Coolify".to_string(),
-        transport: "http".to_string(),
-        command: String::new(),
-        args: Vec::new(),
-        url: Some("http://45.136.237.171:8000/mcp".to_string()),
-        auth_token: Some("6|MCACWwGmqtm54HnQSXbDVD8g9NoI29qREODfpi6t926a1ded".to_string()),
-        headers: None,
-        status: Some("online".to_string()),
-    }]
+    Vec::new()
 }
 
 #[tauri::command]
@@ -644,12 +632,18 @@ fn handle_gateway_client(mut stream: TcpStream) {
     }
 
     if method == "GET" && (path == "/" || path == "/health") {
+        let servers = load_configured_servers();
+        let server_names: Vec<String> = servers
+            .into_iter()
+            .filter(|s| s.status.as_deref() != Some("standby"))
+            .map(|s| s.name)
+            .collect();
+
         let json_body = serde_json::json!({
             "status": "healthy",
             "gateway": "mcp-gateway-native",
             "version": "1.0.0",
-            "port": 8080,
-            "activeDownstreamServers": ["Coolify"],
+            "activeDownstreamServers": server_names,
             "sseEndpoint": "http://127.0.0.1:8080/sse"
         }).to_string();
 
