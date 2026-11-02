@@ -2022,7 +2022,7 @@ dependencies = [
 
 [[package]]
 name = "mcp-gateway-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "tauri-native",
 ]
@@ -3512,7 +3512,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-native"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "log",
  "regex",
