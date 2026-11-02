@@ -19,7 +19,7 @@ import {
   type McpServer,
   type RpcLog,
   subscribeToServers,
-  getRpcLogs,
+  fetchRpcLogs,
 } from "@/lib/mcp-service"
 
 export function OverviewStats({
@@ -32,19 +32,24 @@ export function OverviewStats({
   const [servers, setServers] = React.useState<McpServer[]>(propServers || [])
   const [logs, setLogs] = React.useState<RpcLog[]>([])
 
+  const updateLogs = React.useCallback(async () => {
+    const data = await fetchRpcLogs()
+    setLogs(data)
+  }, [])
+
   React.useEffect(() => {
+    updateLogs()
     if (propServers) {
       setServers(propServers)
-      setLogs(getRpcLogs())
       return
     }
 
     const unsubscribe = subscribeToServers((updated) => {
       setServers(updated)
-      setLogs(getRpcLogs())
+      updateLogs()
     })
     return unsubscribe
-  }, [propServers])
+  }, [propServers, updateLogs])
 
   const onlineServers = servers.filter((s) => s.status === "online").length
   const totalServers = servers.length

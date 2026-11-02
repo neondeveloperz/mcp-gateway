@@ -137,6 +137,23 @@ flowchart LR
 - **ระบบ Pagination & Multi-Column Sorting**: จัดเรียงตารางและแบ่งหน้าครบทุกแท็บ
 - **Desktop App Icon แบบใส 100%**: โลโก้ Quantum Gateway เรืองแสงแบบไม่มีกรอบพื้นหลังสีดำ สำหรับ macOS Dock (`.icns`), Windows (`.ico`) และ Web Favicon
 
+### 10. 🔔 โหมด System Tray & ทำงานเบื้องหลังตลอดเวลา (Background Daemon)
+- **Close-to-Tray**: เมื่อกดปิดหน้าต่างแอป ตัว MCP Gateway Core จะยังคงรันอยู่เบื้องหลังอย่างต่อเนื่อง โดยย่อลงไปยัง macOS Menu Bar หรือ Windows System Tray ทำให้การเชื่อมต่อของ AI IDEs (Cursor, Claude) ไม่หลุด
+- **เมนูด่วนใน Tray**: เปิดหน้าต่างหลัก, ตรวจสอบสถานะ Core, คัดลอกลิงก์ SSE Endpoint หรือออกจากแอปพลิเคชันได้จาก System Tray
+
+### 11. 🛡️ ระบบป้องกันข้อมูลสำคัญรั่วไหล (Data Loss Prevention - DLP)
+- **ตรวจจับและเซ็นเซอร์ข้อมูลก่อนถึง AI**: สแกนข้อมูลผลลัพธ์ของ Tool และฐานข้อมูลก่อนส่งกลับไปยัง Context Window ของโมเดล AI
+- **ครอบคลุม Secret ทุกรูปแบบ**: เซ็นเซอร์หรือบล็อก OpenAI keys, Anthropic tokens, GitHub PATs, AWS credentials, Gemini keys, Slack tokens, JWTs, PEM private keys, Database passwords, ข้อมูลบัตรเครดิต (PCI-DSS), และอีเมล (PII)
+- **ปรับพฤติกรรมได้ตามต้องการ**: เลือกระหว่าง `Mask` (เซ็นเซอร์ข้อความ), `Block` (ปฏิเสธคำสั่งทันที) หรือ `Audit` (บันทึกสถิติอย่างเดียว) พร้อม Live Simulator สำหรับทดสอบการเซ็นเซอร์สด
+
+### 12. 🛒 ศูนย์รวม MCP Servers & Registry สำเร็จรูป (1-Click Connect)
+- **Curated MCP Hub**: หน้าต่างคลัง MCP Servers ยอดนิยม (GitHub, Brave Search, Filesystem, PostgreSQL, SQLite, Docker, Fetch, Memory, Slack, Puppeteer, GitLab, Redis)
+- **ติดตั้งในคลิกเดียว**: ระบบช่วยตั้งค่าคำสั่งรัน (`npx`, `uvx`) และฟอร์มกรอก API Keys ให้พร้อมเชื่อมต่อเข้า Gateway Core ทันทีโดยไม่ต้องเขียน CLI
+
+### 13. 🐳 โหมด Headless / CLI และรองรับ Docker สำหรับเซิร์ฟเวอร์
+- **รันแบบไร้หน้าต่าง (Headless Daemon)**: ใช้งานเป็นเซิร์ฟเวอร์หลังบ้านบน Linux VPS ผ่านคำสั่ง `mcp-gateway --headless --port 8080` หรือไบนารี `mcp-gateway-cli --host 0.0.0.0 --port 8080`
+- **พร้อมรันบน Docker**: มาพร้อม `Dockerfile` (Multi-stage build nonroot) และ `docker-compose.yml` สำหรับนำไปขึ้น Cloud / Remote VPS ได้ทันที
+
 ---
 
 ## 🚀 การติดตั้งและเริ่มต้นใช้งาน (Getting Started)

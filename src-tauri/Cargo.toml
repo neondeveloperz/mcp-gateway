@@ -8,11 +8,16 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "tauri_native_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "mcp-gateway"
+path = "src/main.rs"
+
+[[bin]]
+name = "mcp-gateway-cli"
+path = "src/bin/cli.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -20,7 +25,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 log = "0.4"
 tauri-plugin-log = "2"
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

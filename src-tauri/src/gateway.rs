@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
+
+use serde::{Deserialize, Serialize};
 
 use crate::database::{
     execute_db_describe_table, execute_db_explain, execute_db_list_databases, execute_db_list_tables,
@@ -12,7 +16,76 @@ use crate::security::{
     check_anti_loop, check_circuit_breaker, is_high_risk_tool, record_circuit_outcome,
     PendingApprovalInternal, PENDING_APPROVALS,
 };
-use crate::types::{load_configured_servers, GatewayServerConfig};
+use crate::types::{home_dir, load_configured_servers, GatewayServerConfig};
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GatewayTrafficLog {
+    pub id: String,
+    pub time: String,
+    pub method: String,
+    pub server: String,
+    pub target: String,
+    #[serde(rename = "latencyMs")]
+    pub latency_ms: u64,
+    pub status: String,
+    pub details: Option<String>,
+    #[serde(rename = "clientIp")]
+    pub client_ip: Option<String>,
+    pub transport: Option<String>,
+    #[serde(rename = "requestPayload")]
+    pub request_payload: Option<String>,
+    #[serde(rename = "responsePayload")]
+    pub response_payload: Option<String>,
+}
+
+pub fn get_traffic_logs_path() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".mcp_gateway").join("traffic_logs.json"))
+}
+
+pub static TRAFFIC_LOGS: std::sync::LazyLock<Mutex<Vec<GatewayTrafficLog>>> =
+    std::sync::LazyLock::new(|| {
+        let mut list = Vec::new();
+        if let Some(path) = get_traffic_logs_path() {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(saved) = serde_json::from_str::<Vec<GatewayTrafficLog>>(&content) {
+                    list = saved;
+                }
+            }
+        }
+        Mutex::new(list)
+    });
+
+pub fn record_traffic_log(log: GatewayTrafficLog) {
+    if let Ok(mut logs) = TRAFFIC_LOGS.lock() {
+        logs.insert(0, log);
+        logs.truncate(200);
+        if let Some(path) = get_traffic_logs_path() {
+            if let Ok(json) = serde_json::to_string_pretty(&*logs) {
+                let _ = std::fs::write(&path, json);
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub fn get_gateway_traffic_logs() -> Vec<GatewayTrafficLog> {
+    if let Ok(logs) = TRAFFIC_LOGS.lock() {
+        logs.clone()
+    } else {
+        Vec::new()
+    }
+}
+
+#[tauri::command]
+pub fn clear_gateway_traffic_logs() -> Result<(), String> {
+    if let Ok(mut logs) = TRAFFIC_LOGS.lock() {
+        logs.clear();
+        if let Some(path) = get_traffic_logs_path() {
+            let _ = std::fs::write(&path, "[]");
+        }
+    }
+    Ok(())
+}
 
 pub fn handle_json_rpc(body_str: &str) -> serde_json::Value {
     let Ok(val) = serde_json::from_str::<serde_json::Value>(body_str) else {
@@ -157,6 +230,14 @@ pub fn handle_json_rpc(body_str: &str) -> serde_json::Value {
                     target_server = Some(srv.clone());
                     target_tool_name = &tool_name[prefix.len()..];
                     break;
+                }
+            }
+
+            if target_server.is_none() {
+                if target_tool_name.contains("procedure") || target_tool_name.starts_with("execute_") || target_tool_name.contains("easypanel") {
+                    target_server = servers.iter().find(|s| s.name.eq_ignore_ascii_case("easypanel")).cloned();
+                } else if !target_tool_name.starts_with("db_") {
+                    target_server = servers.iter().find(|s| s.name.eq_ignore_ascii_case("coolify")).cloned();
                 }
             }
 
@@ -417,12 +498,17 @@ pub fn handle_json_rpc(body_str: &str) -> serde_json::Value {
                     if let Ok(res_str) = execute_remote_mcp(url, srv.auth_token, srv.headers, payload.clone()) {
                         if let Ok(downstream_json) = serde_json::from_str::<serde_json::Value>(&res_str) {
                             if let Some(res) = downstream_json.get("result") {
-                                record_circuit_outcome(&srv.name, true);
-                                return serde_json::json!({
-                                    "jsonrpc": "2.0",
-                                    "id": id,
-                                    "result": res
-                                });
+                                let is_err = res.get("isError").and_then(|v| v.as_bool()).unwrap_or(false);
+                                if !is_err {
+                                    record_circuit_outcome(&srv.name, true);
+                                    return serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "id": id,
+                                        "result": res
+                                    });
+                                } else {
+                                    last_error = Some(res.clone());
+                                }
                             } else if let Some(err) = downstream_json.get("error") {
                                 last_error = Some(err.clone());
                             }
@@ -432,6 +518,13 @@ pub fn handle_json_rpc(body_str: &str) -> serde_json::Value {
             }
 
             if let Some(err) = last_error {
+                if err.get("isError").is_some() {
+                    return serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": err
+                    });
+                }
                 return serde_json::json!({
                     "jsonrpc": "2.0",
                     "id": id,
@@ -627,7 +720,7 @@ pub fn handle_json_rpc(body_str: &str) -> serde_json::Value {
     }
 }
 
-pub fn handle_gateway_client(mut stream: TcpStream) {
+pub fn handle_gateway_client(mut stream: TcpStream, port: u16) {
     let Ok(clone_stream) = stream.try_clone() else { return; };
     let mut reader = BufReader::new(clone_stream);
     let mut first_line = String::new();
@@ -707,7 +800,7 @@ pub fn handle_gateway_client(mut stream: TcpStream) {
         return;
     }
 
-    if method == "POST" && (path.starts_with("/messages") || path.starts_with("/mcp") || path == "/") {
+    if method == "POST" && (path.starts_with("/messages") || path.starts_with("/mcp") || path.starts_with("/sse") || path == "/") {
         let mut body = vec![0u8; content_length];
         if content_length > 0 {
             let _ = reader.read_exact(&mut body);
@@ -725,8 +818,125 @@ pub fn handle_gateway_client(mut stream: TcpStream) {
             }
         }
 
+        let start_time = Instant::now();
         let rpc_result = handle_json_rpc(&body_str);
-        let json_res = serde_json::to_string(&rpc_result).unwrap_or_else(|_| "{}".to_string());
+        let latency_ms = start_time.elapsed().as_millis() as u64;
+        let mut json_res = serde_json::to_string(&rpc_result).unwrap_or_else(|_| "{}".to_string());
+
+        // Data Loss Prevention (DLP) filter & policy enforcement
+        let mut dlp_blocked = false;
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body_str) {
+            let target_name = val
+                .get("params")
+                .and_then(|p| p.get("name").or_else(|| p.get("procedure")))
+                .and_then(|t| t.as_str());
+
+            match crate::dlp::scan_and_enforce_dlp(&json_res, target_name) {
+                crate::dlp::DlpEnforceResult::Allowed(sanitized) => {
+                    json_res = sanitized;
+                }
+                crate::dlp::DlpEnforceResult::Blocked { rule_name, reason } => {
+                    dlp_blocked = true;
+                    let id_val = val.get("id").cloned().unwrap_or(serde_json::Value::Null);
+                    json_res = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id_val,
+                        "error": {
+                            "code": -32001,
+                            "message": format!("🛡️ [DLP Blocked]: {} - {}", rule_name, reason),
+                            "data": {
+                                "ruleName": rule_name,
+                                "policy": "dlp_violation"
+                            }
+                        }
+                    })
+                    .to_string();
+                }
+            }
+        }
+
+        // Asynchronously record traffic log for monitoring & UI
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body_str) {
+            let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("unknown").to_string();
+            let target = val
+                .get("params")
+                .and_then(|p| p.get("name").or_else(|| p.get("procedure")))
+                .and_then(|t| t.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let server = if target.starts_with("db_") {
+                let db_alias = val
+                    .get("params")
+                    .and_then(|p| p.get("arguments"))
+                    .and_then(|a| a.get("database"))
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("Database");
+                format!("Database ({})", db_alias)
+            } else if target.contains("procedure")
+                || target.contains("easypanel")
+                || target.starts_with("execute_")
+                || target == "listProjects"
+            {
+                "Easypanel".to_string()
+            } else if target.is_empty() {
+                "Gateway Core".to_string()
+            } else {
+                "Coolify".to_string()
+            };
+
+            let is_error = rpc_result.get("error").is_some()
+                || rpc_result
+                    .get("result")
+                    .and_then(|r| r.get("isError"))
+                    .and_then(|e| e.as_bool())
+                    .unwrap_or(false);
+            let status = if dlp_blocked {
+                "dlp_blocked".to_string()
+            } else if is_error {
+                "error".to_string()
+            } else {
+                "success".to_string()
+            };
+
+            let now_secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let secs_today = (now_secs + 7 * 3600) % 86400; // Local Bangkok GMT+7
+            let hours = secs_today / 3600;
+            let minutes = (secs_today % 3600) / 60;
+            let seconds = secs_today % 60;
+            let time_str = format!("{:02}:{:02}:{:02}", hours, minutes, seconds);
+
+            let client_ip = stream
+                .peer_addr()
+                .map(|a| a.ip().to_string())
+                .unwrap_or_else(|_| "127.0.0.1".to_string());
+
+            let log_entry = GatewayTrafficLog {
+                id: format!(
+                    "log-{}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis())
+                        .unwrap_or(0)
+                ),
+                time: time_str,
+                method,
+                server,
+                target,
+                latency_ms,
+                status,
+                details: Some(format!("Gateway Port {}", port)),
+                client_ip: Some(client_ip),
+                transport: Some("sse".to_string()),
+                request_payload: Some(crate::security::redact_secrets(&body_str)),
+                response_payload: Some(crate::security::redact_secrets(&json_res)),
+            };
+            record_traffic_log(log_entry);
+        }
+
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             json_res.len(),
@@ -742,19 +952,25 @@ pub fn handle_gateway_client(mut stream: TcpStream) {
 }
 
 pub fn start_embedded_gateway(port: u16) {
-    let addr = format!("127.0.0.1:{}", port);
+    start_embedded_gateway_with_host("127.0.0.1", port);
+}
+
+pub fn start_embedded_gateway_with_host(host: &str, port: u16) {
+    let addr = format!("{}:{}", host, port);
     match TcpListener::bind(&addr) {
         Ok(listener) => {
+            println!("🚀 Native Gateway Core listening on http://{}", addr);
             log::info!("🚀 Native Gateway Core listening on http://{}", addr);
             for stream in listener.incoming() {
                 if let Ok(stream) = stream {
                     std::thread::spawn(move || {
-                        handle_gateway_client(stream);
+                        handle_gateway_client(stream, port);
                     });
                 }
             }
         }
         Err(e) => {
+            eprintln!("❌ Failed to bind native Gateway Core on {}: {}", addr, e);
             log::warn!("Failed to bind native Gateway Core on {}: {}", addr, e);
         }
     }

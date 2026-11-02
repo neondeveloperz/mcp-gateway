@@ -53,6 +53,7 @@ import { toast } from "sonner"
 import { TablePagination } from "@/components/ui/table-pagination"
 import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
 import { fetchDiscoveredServers, fetchDiscoveredTools, type McpServer } from "@/lib/mcp-service"
+import { DlpGuardrails } from "@/components/security/dlp-guardrails"
 
 export type ToolPermissionLevel = "auto-allow" | "prompt-confirm" | "block"
 
@@ -497,24 +498,33 @@ export function SecurityView() {
 
       {/* Tabs Navigation */}
       <Tabs defaultValue="tools" className="w-full space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto p-1 gap-1">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 h-auto p-1 gap-1">
           <TabsTrigger value="tools" className="cursor-pointer gap-1.5 text-xs">
             <WrenchIcon className="size-3.5" />
-            <span>Tool Permissions (RBAC)</span>
+            <span>Tool RBAC</span>
+          </TabsTrigger>
+          <TabsTrigger value="dlp" className="cursor-pointer gap-1.5 text-xs">
+            <ShieldAlertIcon className="size-3.5 text-emerald-400" />
+            <span>Data Loss Prevention</span>
           </TabsTrigger>
           <TabsTrigger value="paths" className="cursor-pointer gap-1.5 text-xs">
             <FolderLockIcon className="size-3.5" />
-            <span>Filesystem Boundaries</span>
+            <span>Filesystem Paths</span>
           </TabsTrigger>
           <TabsTrigger value="network" className="cursor-pointer gap-1.5 text-xs">
             <NetworkIcon className="size-3.5" />
-            <span>Network & IP Guard</span>
+            <span>Network & IP</span>
           </TabsTrigger>
           <TabsTrigger value="rules" className="cursor-pointer gap-1.5 text-xs">
             <SlidersIcon className="size-3.5" />
-            <span>Global Defense Policies</span>
+            <span>Defense Policies</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* DLP & Data Guardrails */}
+        <TabsContent value="dlp" className="space-y-4">
+          <DlpGuardrails />
+        </TabsContent>
 
         {/* 1. Tool Permissions (RBAC) */}
         <TabsContent value="tools" className="space-y-4">

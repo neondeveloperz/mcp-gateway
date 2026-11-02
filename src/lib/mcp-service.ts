@@ -331,9 +331,26 @@ export function saveRpcLogs(logs: RpcLog[]) {
   }
 }
 
+export async function fetchRpcLogs(): Promise<RpcLog[]> {
+  if (isTauri()) {
+    try {
+      const nativeLogs = await invoke<RpcLog[]>("get_gateway_traffic_logs")
+      if (nativeLogs && nativeLogs.length > 0) {
+        return nativeLogs
+      }
+    } catch (e) {
+      console.warn("Failed to fetch native traffic logs:", e)
+    }
+  }
+  return getRpcLogs()
+}
+
 export function clearRpcLogs() {
   if (typeof window !== "undefined") {
     localStorage.removeItem(RPC_LOGS_STORAGE_KEY)
+  }
+  if (isTauri()) {
+    invoke("clear_gateway_traffic_logs").catch(() => {})
   }
 }
 
@@ -1278,6 +1295,220 @@ export async function executeDatabaseQuery(
   }
   throw new Error("Tauri runtime required to execute live database queries")
 }
+
+// ============================================================================
+// Data Loss Prevention (DLP) & Guardrails
+// ============================================================================
+
+export interface DlpRule {
+  id: string
+  name: string
+  description: string
+  category: "secrets" | "pci" | "pii" | "credentials"
+  enabled: boolean
+  action: "mask" | "block" | "audit"
+  severity: "critical" | "high" | "medium" | "low"
+  maskTemplate: string
+}
+
+export interface DlpIncident {
+  id: string
+  timestampMs: number
+  ruleId: string
+  ruleName: string
+  category: string
+  severity: string
+  actionTaken: string
+  toolName?: string
+  matchPreview: string
+}
+
+export interface DlpScanTestResult {
+  status: "allowed" | "blocked"
+  sanitized?: string
+  ruleName?: string
+  reason?: string
+  blocked: boolean
+}
+
+export async function fetchDlpRules(): Promise<DlpRule[]> {
+  if (isTauri()) {
+    try {
+      return await invoke<DlpRule[]>("get_dlp_rules")
+    } catch {
+      // fallback
+    }
+  }
+  const raw = localStorage.getItem("mcp_gateway_dlp_rules")
+  if (raw) {
+    try {
+      return JSON.parse(raw)
+    } catch {
+      // fallback
+    }
+  }
+  return [
+    {
+      id: "openai-api-key",
+      name: "OpenAI API Key",
+      description: "Detects OpenAI API secret keys (sk-...) and project keys",
+      category: "secrets",
+      enabled: true,
+      action: "mask",
+      severity: "critical",
+      maskTemplate: "[REDACTED_OPENAI_KEY]",
+    },
+    {
+      id: "anthropic-api-key",
+      name: "Anthropic API Key",
+      description: "Detects Anthropic API tokens (sk-ant-...)",
+      category: "secrets",
+      enabled: true,
+      action: "mask",
+      severity: "critical",
+      maskTemplate: "[REDACTED_ANTHROPIC_KEY]",
+    },
+    {
+      id: "github-token",
+      name: "GitHub Personal & OAuth Token",
+      description: "Detects GitHub PATs (ghp_), OAuth (gho_), and fine-grained tokens (github_pat_)",
+      category: "secrets",
+      enabled: true,
+      action: "mask",
+      severity: "critical",
+      maskTemplate: "[REDACTED_GITHUB_TOKEN]",
+    },
+    {
+      id: "aws-credentials",
+      name: "AWS Access Key & Secrets",
+      description: "Detects AWS Access Key IDs (AKIA...) and Secret Access Keys",
+      category: "secrets",
+      enabled: true,
+      action: "mask",
+      severity: "critical",
+      maskTemplate: "[REDACTED_AWS_KEY]",
+    },
+    {
+      id: "gemini-api-key",
+      name: "Google / Gemini API Key",
+      description: "Detects Google AI & Cloud API keys (AIza...)",
+      category: "secrets",
+      enabled: true,
+      action: "mask",
+      severity: "critical",
+      maskTemplate: "[REDACTED_GOOGLE_KEY]",
+    },
+    {
+      id: "slack-token",
+      name: "Slack Bot & User Token",
+      description: "Detects Slack bot and user tokens (xoxb-, xoxp-)",
+      category: "secrets",
+      enabled: true,
+      action: "mask",
+      severity: "high",
+      maskTemplate: "[REDACTED_SLACK_TOKEN]",
+    },
+    {
+      id: "jwt-token",
+      name: "JSON Web Token (JWT)",
+      description: "Detects standard three-part signed JWTs (eyJ...)",
+      category: "credentials",
+      enabled: true,
+      action: "mask",
+      severity: "high",
+      maskTemplate: "[REDACTED_JWT_TOKEN]",
+    },
+    {
+      id: "private-key",
+      name: "Cryptographic Private Key (PEM)",
+      description: "Detects RSA, EC, DSA, OpenSSH, and PGP private key blocks",
+      category: "secrets",
+      enabled: true,
+      action: "block",
+      severity: "critical",
+      maskTemplate: "[REDACTED_PRIVATE_KEY]",
+    },
+    {
+      id: "db-connection-password",
+      name: "Database Password in Connection URI",
+      description: "Detects plaintext credentials in postgresql://, mysql://, redis:// URIs",
+      category: "credentials",
+      enabled: true,
+      action: "mask",
+      severity: "critical",
+      maskTemplate: "[REDACTED_DB_PASSWORD]",
+    },
+    {
+      id: "credit-card",
+      name: "Payment Card (PCI-DSS)",
+      description: "Detects 13-19 digit Visa, Mastercard, Amex, Discover card numbers",
+      category: "pci",
+      enabled: true,
+      action: "mask",
+      severity: "high",
+      maskTemplate: "[REDACTED_PAYMENT_CARD]",
+    },
+    {
+      id: "email-address",
+      name: "Email Address (PII)",
+      description: "Detects email addresses in database results or tool responses",
+      category: "pii",
+      enabled: false,
+      action: "mask",
+      severity: "medium",
+      maskTemplate: "[REDACTED_EMAIL]",
+    },
+  ]
+}
+
+export async function saveDlpRules(rules: DlpRule[]): Promise<void> {
+  if (isTauri()) {
+    try {
+      await invoke("save_dlp_rules", { rules })
+      return
+    } catch {
+      // fallback
+    }
+  }
+  localStorage.setItem("mcp_gateway_dlp_rules", JSON.stringify(rules))
+}
+
+export async function fetchDlpIncidents(): Promise<DlpIncident[]> {
+  if (isTauri()) {
+    try {
+      return await invoke<DlpIncident[]>("get_dlp_incidents")
+    } catch {
+      // fallback
+    }
+  }
+  const raw = localStorage.getItem("mcp_gateway_dlp_incidents")
+  return raw ? JSON.parse(raw) : []
+}
+
+export async function clearDlpIncidents(): Promise<void> {
+  if (isTauri()) {
+    try {
+      await invoke("clear_dlp_incidents")
+      return
+    } catch {
+      // fallback
+    }
+  }
+  localStorage.setItem("mcp_gateway_dlp_incidents", JSON.stringify([]))
+}
+
+export async function testDlpScan(text: string): Promise<DlpScanTestResult> {
+  if (isTauri()) {
+    return await invoke<DlpScanTestResult>("test_dlp_scan", { text })
+  }
+  // Basic mock test for web preview
+  return {
+    status: "allowed",
+    sanitized: text.replace(/sk-[A-Za-z0-9_-]{20,}/g, "[REDACTED_OPENAI_KEY]"),
+    blocked: false,
+  }
+}
+
 
 
 

@@ -31,7 +31,7 @@ import {
 import { toast } from "sonner"
 import { TablePagination } from "@/components/ui/table-pagination"
 import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
-import { getRpcLogs, type RpcLog } from "@/lib/mcp-service"
+import { fetchRpcLogs, type RpcLog } from "@/lib/mcp-service"
 
 export function OverviewRecentCalls({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const [calls, setCalls] = React.useState<RpcLog[]>([])
@@ -45,8 +45,9 @@ export function OverviewRecentCalls({ onNavigate }: { onNavigate?: (tab: string)
   const [currentPage, setCurrentPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(5)
 
-  const refreshLogs = React.useCallback(() => {
-    setCalls(getRpcLogs())
+  const refreshLogs = React.useCallback(async () => {
+    const data = await fetchRpcLogs()
+    setCalls(data)
   }, [])
 
   React.useEffect(() => {

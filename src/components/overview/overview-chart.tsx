@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/chart"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ActivityIcon, TrendingUpIcon } from "lucide-react"
-import { getRpcLogs, type RpcLog } from "@/lib/mcp-service"
+import { fetchRpcLogs, type RpcLog } from "@/lib/mcp-service"
 
 const chartConfig = {
   requests: {
@@ -34,8 +34,8 @@ export function OverviewChart() {
   const [chartData, setChartData] = React.useState<Array<{ time: string; requests: number; latency: number }>>([])
   const [peakInfo, setPeakInfo] = React.useState<string>("Live stream active")
 
-  const refreshChart = React.useCallback(() => {
-    const logs: RpcLog[] = getRpcLogs()
+  const refreshChart = React.useCallback(async () => {
+    const logs: RpcLog[] = await fetchRpcLogs()
     if (logs.length === 0) {
       const now = new Date().toLocaleTimeString("en-US", { hour12: false })
       setChartData([{ time: now, requests: 0, latency: 0 }])

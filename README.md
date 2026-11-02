@@ -132,6 +132,23 @@ flowchart LR
 - **Table Pagination & Sorting**: Robust pagination and column sorting across all data grids.
 - **Native macOS & Windows Assets**: Transparent floating quantum gateway emblem (`.icns` for macOS Dock, `.ico` for Windows).
 
+### 10. 🔔 System Tray & Background Daemon Mode
+- **Zero-Disruption Background Core**: Closing the window automatically minimizes MCP Gateway to the macOS Menu Bar / Windows System Tray, ensuring AI IDEs (Cursor, Claude) maintain active connections without interruption.
+- **Quick Actions Menu**: Open dashboard, inspect Core status, copy the active SSE endpoint, or quit directly from the system tray.
+
+### 11. 🛡️ Data Loss Prevention (DLP) & Secret Redactor
+- **Automated Response Sanitization**: Scans all outgoing tool results and database outputs before returning to AI context windows.
+- **Comprehensive Threat Patterns**: Redacts or blocks OpenAI keys, Anthropic tokens, GitHub PATs, AWS credentials, Google Gemini keys, Slack tokens, JWTs, PEM private keys, DB connection passwords, credit cards (PCI-DSS), and PII email addresses.
+- **Configurable Enforcement**: Supports `Mask` (redact inline), `Block` (halt tool call), and `Audit` policies, complete with an interactive live DLP testing simulator.
+
+### 12. 🛒 MCP Hub & Package Registry (1-Click Connect)
+- **Curated Server Catalog**: Built-in App Store featuring verified MCP servers (GitHub, Brave Search, Filesystem, PostgreSQL, SQLite, Docker, Fetch, Memory, Slack, Puppeteer, GitLab, Redis).
+- **1-Click Installation**: Interactive setup dialog automatically handles runtime commands (`npx`, `uvx`) and required environment credentials.
+
+### 13. 🐳 Headless Daemon & Docker Server Deployment
+- **Headless CLI Binary**: Run MCP Gateway as a standalone server without a GUI via `mcp-gateway --headless --port 8080` or `mcp-gateway-cli --host 0.0.0.0 --port 8080`.
+- **Docker Ready**: Includes production `Dockerfile` and `docker-compose.yml` for VPS and cloud deployments.
+
 ---
 
 ## 🚀 Getting Started

@@ -14,6 +14,7 @@ import { SettingsView } from "@/components/settings/settings-view"
 import { DocsView } from "@/components/docs/docs-view"
 import { StatusView } from "@/components/status/status-view"
 import { HelpView } from "@/components/help/help-view"
+import { MarketplaceView } from "@/components/marketplace/marketplace-view"
 import { ApprovalModal } from "@/components/security/approval-modal"
 import {
   SidebarInset,
@@ -25,6 +26,7 @@ import { Toaster } from "@/components/ui/sonner"
 const tabTitles: Record<string, string> = {
   overview: "Overview",
   servers: "MCP Servers",
+  marketplace: "Registry & Packages",
   databases: "Databases (Built-in)",
   tools: "Tools Explorer",
   resources: "Resources & Prompts",
@@ -64,6 +66,8 @@ export default function App() {
           <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0" data-ui-scroll-container>
             {activeTab === "servers" ? (
               <ServersView />
+            ) : activeTab === "marketplace" ? (
+              <MarketplaceView />
             ) : activeTab === "databases" ? (
               <DatabasesView />
             ) : activeTab === "tools" ? (

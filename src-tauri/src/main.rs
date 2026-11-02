@@ -2,5 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    tauri_native_lib::run()
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--headless" || a == "-H" || a == "serve" || a == "daemon") {
+        tauri_native_lib::run_headless(&args);
+    } else {
+        tauri_native_lib::run();
+    }
 }

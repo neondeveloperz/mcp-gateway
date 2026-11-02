@@ -25,6 +25,7 @@ import {
   CircleHelpIcon,
   GlobeIcon,
   DatabaseIcon,
+  LayersIcon,
 } from "lucide-react"
 import {
   type McpServer,
@@ -89,6 +90,13 @@ export function AppSidebar({
       url: "#servers",
       badge: `${onlineServers} Active`,
       icon: <ServerIcon className="size-4" />,
+    },
+    {
+      id: "marketplace",
+      title: "Registry & Hub",
+      url: "#marketplace",
+      badge: "Hub",
+      icon: <LayersIcon className="size-4 text-emerald-400" />,
     },
     {
       id: "databases",

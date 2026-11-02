@@ -52,7 +52,7 @@ import { toast } from "sonner"
 import { TablePagination } from "@/components/ui/table-pagination"
 import { TableSortHeader, type SortOrder } from "@/components/ui/table-sort-header"
 import {
-  getRpcLogs,
+  fetchRpcLogs,
   clearRpcLogs,
   logRpcCall,
   fetchDiscoveredServers,
@@ -83,8 +83,9 @@ export function TrafficLogsView() {
 
   const logContainerRef = React.useRef<HTMLDivElement>(null)
 
-  const loadLogs = React.useCallback(() => {
-    setLogs(getRpcLogs())
+  const loadLogs = React.useCallback(async () => {
+    const data = await fetchRpcLogs()
+    setLogs(data)
   }, [])
 
   React.useEffect(() => {
