@@ -183,9 +183,16 @@ flowchart LR
 
 4. **คอมไพล์เป็นตัวติดตั้งสำหรับ Production**:
    ```bash
-   bun run tauri build
+   # คอมไพล์ตัวติดตั้ง Desktop GUI (.dmg / .exe / .AppImage / .deb)
+   bun run build:gui
+
+   # คอมไพล์ไฟล์ไบนารี Headless CLI (mcp-gateway-cli)
+   bun run build:cli
+
+   # คอมไพล์ทั้งคู่พร้อมกัน (ทั้ง GUI และ CLI)
+   bun run build:all
    ```
-   ไฟล์ตัวติดตั้งสำหรับติดตั้งลงเครื่อง (`.dmg` สำหรับ macOS, `.msi` / `.exe` สำหรับ Windows) จะอยู่ที่โฟลเดอร์ `src-tauri/target/release/bundle/`
+   ไฟล์ตัวติดตั้ง Desktop (`.dmg` สำหรับ macOS, `.msi` / `.exe` สำหรับ Windows) จะอยู่ที่ `src-tauri/target/release/bundle/` และไฟล์ Standalone CLI จะอยู่ที่ `src-tauri/target/release/mcp-gateway-cli`
 
 ---
 

@@ -120,6 +120,46 @@ jobs:
           Copy-Item -LiteralPath $binaryPath -Destination $assetPath
           gh release upload "v$version" $assetPath --clobber
 
+      - name: Build and Package CLI executable
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.tauri.outputs.appVersion }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="0.2.0"
+          fi
+
+          if [ -n "${{ matrix.rustTargets }}" ]; then
+            cargo build --release --manifest-path src-tauri/Cargo.toml --target ${{ matrix.rustTargets }} --bin mcp-gateway-cli
+            BIN_DIR="src-tauri/target/${{ matrix.rustTargets }}/release"
+          else
+            cargo build --release --manifest-path src-tauri/Cargo.toml --bin mcp-gateway-cli
+            BIN_DIR="src-tauri/target/release"
+          fi
+
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            CLI_BIN="$BIN_DIR/mcp-gateway-cli.exe"
+            ZIP_NAME="mcp-gateway-cli-v${VERSION}-windows-x64.zip"
+            7z a "$RUNNER_TEMP/$ZIP_NAME" "$CLI_BIN"
+            gh release upload "v$VERSION" "$RUNNER_TEMP/$ZIP_NAME" --clobber
+            cp "$CLI_BIN" "$RUNNER_TEMP/mcp-gateway-cli-v${VERSION}-windows-x64.exe"
+            gh release upload "v$VERSION" "$RUNNER_TEMP/mcp-gateway-cli-v${VERSION}-windows-x64.exe" --clobber
+          else
+            CLI_BIN="$BIN_DIR/mcp-gateway-cli"
+            chmod +x "$CLI_BIN"
+            if [ "${{ matrix.name }}" = "Linux" ]; then
+              ARCH_NAME="linux-x64"
+            elif [ "${{ matrix.name }}" = "macOS Apple Silicon" ]; then
+              ARCH_NAME="darwin-arm64"
+            else
+              ARCH_NAME="darwin-x64"
+            fi
+            TAR_NAME="mcp-gateway-cli-v${VERSION}-${ARCH_NAME}.tar.gz"
+            tar -czf "$RUNNER_TEMP/$TAR_NAME" -C "$BIN_DIR" mcp-gateway-cli
+            gh release upload "v$VERSION" "$RUNNER_TEMP/$TAR_NAME" --clobber
+          fi
+
       - name: Release summary
         if: steps.tauri.outputs.releaseHtmlUrl != ''
         shell: bash

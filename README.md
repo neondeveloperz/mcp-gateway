@@ -178,9 +178,16 @@ flowchart LR
 
 4. **Build native production binaries**:
    ```bash
-   bun run tauri build
+   # Build desktop GUI installer (.dmg / .exe / .AppImage / .deb)
+   bun run build:gui
+
+   # Build standalone headless CLI binary (mcp-gateway-cli)
+   bun run build:cli
+
+   # Build both GUI and CLI binaries
+   bun run build:all
    ```
-   The compiled desktop installer (`.dmg` on macOS, `.msi` / `.exe` on Windows) will be located in `src-tauri/target/release/bundle/`.
+   The compiled desktop installer (`.dmg` on macOS, `.msi` / `.exe` on Windows) will be located in `src-tauri/target/release/bundle/`, and the standalone CLI executable in `src-tauri/target/release/mcp-gateway-cli`.
 
 ---
 
