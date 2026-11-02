@@ -75,7 +75,7 @@ export function OverviewHeader({
               Engine Online
             </Badge>
             <Badge variant="outline" className="font-mono text-xs text-muted-foreground">
-              v0.1.1 · Protocol 2024-11-05
+              v0.2.0 · Protocol 2024-11-05
             </Badge>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-xs text-muted-foreground">

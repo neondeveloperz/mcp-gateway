@@ -176,7 +176,7 @@ export function AppSidebar({
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:hidden">
                 <span className="truncate font-semibold tracking-tight">MCP Gateway</span>
-                <span className="truncate text-xs text-muted-foreground">version 0.1.1</span>
+                <span className="truncate text-xs text-muted-foreground">version 0.2.0</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
