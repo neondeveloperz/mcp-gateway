@@ -1,6 +1,7 @@
 [package]
 name = "tauri-native"
 version = "0.2.0"
+default-run = "mcp-gateway"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2024"
