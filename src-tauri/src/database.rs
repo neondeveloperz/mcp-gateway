@@ -51,6 +51,7 @@ pub fn save_configured_databases(dbs: &[DatabaseConfig]) -> Result<(), String> {
 
 pub fn clean_sqlite_path(uri: &str) -> String {
     let s = uri.trim();
+    #[allow(unused_mut)]
     let mut stripped = if let Some(rest) = s.strip_prefix("sqlite://") {
         rest
     } else {
