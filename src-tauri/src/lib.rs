@@ -1,4 +1,3 @@
-pub mod database;
 pub mod discovery;
 pub mod dlp;
 pub mod gateway;
@@ -205,11 +204,6 @@ pub fn run() {
             tunnel::get_cloudflare_tunnel_status,
             tunnel::start_cloudflare_tunnel,
             tunnel::stop_cloudflare_tunnel,
-            database::get_gateway_databases,
-            database::save_gateway_database,
-            database::delete_gateway_database,
-            database::test_gateway_database_connection,
-            database::execute_gateway_database_query,
             gateway::get_gateway_traffic_logs,
             gateway::clear_gateway_traffic_logs
         ])

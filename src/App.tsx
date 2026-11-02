@@ -9,7 +9,6 @@ import { TrafficLogsView } from "@/components/logs/traffic-logs-view"
 import { ApiKeysView } from "@/components/tokens/api-keys-view"
 import { SecurityView } from "@/components/security/security-view"
 import { CloudflareTunnelView } from "@/components/tunnel/cloudflare-tunnel-view"
-import { DatabasesView } from "@/components/database/databases-view"
 import { SettingsView } from "@/components/settings/settings-view"
 import { DocsView } from "@/components/docs/docs-view"
 import { StatusView } from "@/components/status/status-view"
@@ -27,7 +26,6 @@ const tabTitles: Record<string, string> = {
   overview: "Overview",
   servers: "MCP Servers",
   marketplace: "Registry & Packages",
-  databases: "Databases (Built-in)",
   tools: "Tools Explorer",
   resources: "Resources & Prompts",
   logs: "Traffic & Logs",
@@ -68,8 +66,6 @@ export default function App() {
               <ServersView />
             ) : activeTab === "marketplace" ? (
               <MarketplaceView />
-            ) : activeTab === "databases" ? (
-              <DatabasesView />
             ) : activeTab === "tools" ? (
               <ToolsView />
             ) : activeTab === "resources" ? (

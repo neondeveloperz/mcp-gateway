@@ -63,7 +63,7 @@ flowchart LR
         S1["Local Stdio Servers (Docker, Node, Python)"]
         S2["Remote SSE Servers (Coolify, EasyPanel)"]
         S3["Cloud MCP Services"]
-        S4["PostgreSQL / SQLite Databases"]
+        S4["Databases & Storage (via Hub)"]
     end
 
     AI_Clients -->|Single SSE Connection| Proxy
@@ -104,10 +104,10 @@ flowchart LR
 - **แชร์ MCP Gateway ทางไกล**: เปิดให้เพื่อนร่วมทีมหรือ AI Agent จากภายนอกเชื่อมต่อเข้ามายัง MCP Gateway ในเครื่องได้ผ่าน HTTPS โดยไม่ต้อง Forward Port หรือมี Public IP
 - **ควบคุมได้ในแอป**: ตรวจสอบสถานะการทำงาน, สั่ง Start/Stop Tunnel และตรวจสอบ Public Hostname ได้โดยตรง
 
-### 4. 🗄️ Built-in Database Engine (PostgreSQL, SQLite, MySQL, Redis)
-- **Native Rust Connectors**: ประสิทธิภาพสูงด้วย Driver ระดับ Native ใน Rust
-- **Table & Schema Inspector**: สำรวจโครงสร้างตาราง, Data Types, Primary Keys และ Relationships
-- **SQL Query Console**: ทดสอบรันคำสั่ง SQL (Parameterized queries), สั่ง Explain ดู Execution Plan และทดสอบงานด้านข้อมูลได้อย่างปลอดภัย
+### 4. 📦 Registry & MCP Package Hub (ติดตั้งฐานข้อมูลและบริการเสริมใน 1 คลิก)
+- **คลังแพ็กเกจ MCP มาตรฐาน**: ค้นหา เลือกดู และติดตั้ง MCP Servers ยอดนิยมทั้งของ Official และ Community ได้ในคลิกเดียว
+- **รองรับฐานข้อมูลครบวงจร**: เชื่อมต่อ PostgreSQL (`@modelcontextprotocol/server-postgres`), SQLite (`mcp-server-sqlite`), และ Redis (`mcp-server-redis`) ผ่านมาตรฐาน MCP โดยตรง ไม่ทำให้ Core ของ Gateway บวม
+- **ขยายความสามารถได้ไม่จำกัด**: เพิ่มเครื่องมือค้นหาเว็บ (Brave, Puppeteer), Docker, Git, Slack หรือระบบ Memory เพิ่มเติมได้อย่างง่ายดาย พร้อมฟอร์มกรอกพารามิเตอร์และการตรวจสอบอัตโนมัติ
 
 ### 5. 🧪 Interactive Tools Explorer & Playground
 - **JSON Schema Inspector**: ถอดรหัสโครงสร้างพารามิเตอร์ของ Tool (`inputSchema`) ออกมาเป็นฟอร์มกรอกข้อมูลอัตโนมัติ
@@ -247,10 +247,12 @@ mcp-gateway/
 ├── public/                 # Static assets, favicon, app-icon
 ├── src-tauri/              # Rust Native Backend (Tauri v2 Core)
 │   ├── src/
+│   │   ├── bin/
+│   │   │   └── cli.rs      # จุดเริ่มต้นโหมด Headless CLI
 │   │   ├── lib.rs          # จุดลงทะเบียน Tauri Commands และ Lifecycle
 │   │   ├── gateway.rs      # กลไก Reverse Proxy, SSE Engine & Multiplexer
 │   │   ├── discovery.rs    # ตรวจสอบระบบ Host, Telemetry และสแกนคอนฟิก IDE
-│   │   ├── database.rs     # ระบบเชื่อมต่อ PostgreSQL, SQLite, MySQL, Redis
+│   │   ├── dlp.rs          # กลไก Data Loss Prevention (Regex Engine)
 │   │   ├── security.rs     # ระบบตรวจสอบ Bearer Token และ Permission Guardrails
 │   │   ├── tunnel.rs       # กลไกจัดการ Cloudflare Tunnel
 │   │   └── types.rs        # Data Types และ Structs ร่วมในระบบ
@@ -260,7 +262,7 @@ mcp-gateway/
 │   ├── components/
 │   │   ├── overview/       # แดชบอร์ดสรุปผลภาพรวม และกราฟสถิติ
 │   │   ├── servers/        # จัดการเซิร์ฟเวอร์ MCP และสถานะการเชื่อมต่อ
-│   │   ├── database/       # เครื่องมือสำรวจฐานข้อมูลและรัน SQL
+│   │   ├── marketplace/    # ศูนย์รวมแพ็กเกจ (Registry & MCP Hub)
 │   │   ├── tools/          # เครื่องมือทดสอบยิง Tool (Playground)
 │   │   ├── resources/      # เครื่องมือสำรวจ Resources และ Prompt Templates
 │   │   ├── logs/           # หน้าระบบตรวจดู Traffic Log สด

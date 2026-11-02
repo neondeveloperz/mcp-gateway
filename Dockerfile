@@ -42,3 +42,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 
 ENTRYPOINT ["mcp-gateway-cli"]
 CMD ["--port", "8080", "--host", "0.0.0.0"]
+

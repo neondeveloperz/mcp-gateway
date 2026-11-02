@@ -24,7 +24,6 @@ import {
   RadioIcon,
   CircleHelpIcon,
   GlobeIcon,
-  DatabaseIcon,
   LayersIcon,
 } from "lucide-react"
 import {
@@ -32,7 +31,6 @@ import {
   subscribeToServers,
   fetchDiscoveredTools,
   fetchDiscoveredResources,
-  fetchDatabases,
 } from "@/lib/mcp-service"
 
 export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
@@ -50,7 +48,6 @@ export function AppSidebar({
   const [servers, setServers] = React.useState<McpServer[]>([])
   const [toolsCount, setToolsCount] = React.useState<number>(0)
   const [resourcesCount, setResourcesCount] = React.useState<number>(0)
-  const [dbCount, setDbCount] = React.useState<number>(0)
 
   React.useEffect(() => {
     const unsubscribe = subscribeToServers((updated) => {
@@ -61,13 +58,6 @@ export function AppSidebar({
       fetchDiscoveredResources().then((res) => {
         setResourcesCount(res.length)
       })
-      fetchDatabases().then((dbs) => {
-        setDbCount(dbs.filter((d) => d.enabled).length)
-      })
-    })
-
-    fetchDatabases().then((dbs) => {
-      setDbCount(dbs.filter((d) => d.enabled).length)
     })
 
     return unsubscribe
@@ -97,13 +87,6 @@ export function AppSidebar({
       url: "#marketplace",
       badge: "Hub",
       icon: <LayersIcon className="size-4 text-emerald-400" />,
-    },
-    {
-      id: "databases",
-      title: "Databases (Built-in)",
-      url: "#databases",
-      badge: dbCount > 0 ? `${dbCount} PG` : "Connect",
-      icon: <DatabaseIcon className="size-4" />,
     },
     {
       id: "tools",

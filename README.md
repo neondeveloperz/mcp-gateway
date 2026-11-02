@@ -33,7 +33,7 @@ Normally, AI agents and IDEs (Cursor, Claude Desktop, Antigravity, Windsurf, Zed
 **MCP Gateway** solves this by acting as a high-performance **unified reverse proxy**:
 - Exposes a **single multiplexed SSE/HTTP endpoint** (`http://127.0.0.1:8080/sse`) to your AI clients.
 - Connects simultaneously to multiple downstream MCP servers over **Stdio**, **Server-Sent Events (SSE)**, and **Streamable HTTP**.
-- Dynamically aggregates, namespaces, audits, and secures all tools, prompts, resources, and database connections.
+- Dynamically aggregates, namespaces, audits, and secures all tools, prompts, resources, and service extensions.
 
 ```mermaid
 flowchart LR
@@ -59,7 +59,7 @@ flowchart LR
         S1["Local Stdio Servers (Docker, Node, Python)"]
         S2["Remote SSE Servers (Coolify, EasyPanel)"]
         S3["Cloud MCP Services"]
-        S4["PostgreSQL / SQLite Databases"]
+        S4["Databases & Storage (via Hub)"]
     end
 
     AI_Clients -->|Single SSE Connection| Proxy
@@ -100,10 +100,10 @@ flowchart LR
 - **Direct Remote Sharing**: Share your local MCP servers with remote team members or cloud AI agents without public IP or firewall port forwarding.
 - **Integrated Control**: Start, stop, and inspect the tunnel status and public ingress hostname directly from the desktop UI.
 
-### 4. 🗄️ Built-in Database Engine (PostgreSQL, SQLite, MySQL, Redis)
-- **Native Rust Connectors**: High-performance database inspection powered by native Rust drivers.
-- **Schema & Table Inspector**: Inspect tables, column types, primary keys, and relations.
-- **Interactive Query Console**: Execute parameterized SQL queries, explain query performance, and safely test read/write workloads with transaction rollbacks.
+### 4. 📦 Registry & MCP Package Hub (1-Click Database & Service Extensions)
+- **Curated MCP Package Directory**: Effortlessly discover, install, and run official and community MCP servers in 1-click.
+- **Full Database Ecosystem**: Connect PostgreSQL (`@modelcontextprotocol/server-postgres`), SQLite (`mcp-server-sqlite`), and Redis (`mcp-server-redis`) via standard MCP specifications without bloating the gateway core.
+- **Extensible Integration**: Install DevOps, developer tools, web search (Brave, Puppeteer, Docker), and memory servers with automatic parameter prompts and verification.
 
 ### 5. 🧪 Interactive Tools Explorer & Playground
 - **JSON Schema Inspector**: Auto-parses tool parameter definitions (`inputSchema`) into clean visual forms.
@@ -242,10 +242,12 @@ mcp-gateway/
 ├── public/                 # Static assets, web favicon, app-icon
 ├── src-tauri/              # Rust Native Backend (Tauri v2 Core)
 │   ├── src/
+│   │   ├── bin/
+│   │   │   └── cli.rs      # Headless CLI entrypoint
 │   │   ├── lib.rs          # Tauri command dispatcher & lifecycle
 │   │   ├── gateway.rs      # Unified MCP routing engine & SSE server
 │   │   ├── discovery.rs    # Host telemetry & IDE config scanner
-│   │   ├── database.rs     # Native PostgreSQL/SQLite/MySQL/Redis engine
+│   │   ├── dlp.rs          # Data Loss Prevention regex engine & incident manager
 │   │   ├── security.rs     # Token guardrails & permission checks
 │   │   ├── tunnel.rs       # Cloudflare Tunnel integration
 │   │   └── types.rs        # Shared Rust types & data structures
@@ -255,7 +257,7 @@ mcp-gateway/
 │   ├── components/
 │   │   ├── overview/       # Gateway dashboard, activity charts & stats
 │   │   ├── servers/        # Server manager, connection state & actions
-│   │   ├── database/       # Built-in database explorer & SQL runner
+│   │   ├── marketplace/    # Registry & MCP Package Hub
 │   │   ├── tools/          # Interactive tool tester & parameter form
 │   │   ├── resources/      # Prompt templates & resource inspector
 │   │   ├── logs/           # Real-time JSON-RPC traffic monitor

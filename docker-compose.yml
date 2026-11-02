@@ -12,3 +12,4 @@ services:
       - MCP_GATEWAY_HOST=0.0.0.0
     volumes:
       - ./data:/home/gatewayuser/.mcp_gateway
+

@@ -7,10 +7,6 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use crate::database::{
-    execute_db_describe_table, execute_db_explain, execute_db_list_databases, execute_db_list_tables,
-    execute_db_query, get_builtin_database_tools,
-};
 use crate::discovery::execute_remote_mcp;
 use crate::security::{
     check_anti_loop, check_circuit_breaker, is_high_risk_tool, record_circuit_outcome,
@@ -193,8 +189,6 @@ pub fn handle_json_rpc(body_str: &str) -> serde_json::Value {
                 all_tools.push(t);
             }
 
-            // Inject Built-in Database Universal Tools
-            all_tools.extend(get_builtin_database_tools());
 
             serde_json::json!({
                 "jsonrpc": "2.0",
@@ -236,16 +230,13 @@ pub fn handle_json_rpc(body_str: &str) -> serde_json::Value {
             if target_server.is_none() {
                 if target_tool_name.contains("procedure") || target_tool_name.starts_with("execute_") || target_tool_name.contains("easypanel") {
                     target_server = servers.iter().find(|s| s.name.eq_ignore_ascii_case("easypanel")).cloned();
-                } else if !target_tool_name.starts_with("db_") {
+                } else {
                     target_server = servers.iter().find(|s| s.name.eq_ignore_ascii_case("coolify")).cloned();
                 }
             }
 
             let srv_name = target_server.as_ref().map(|s| s.name.clone()).unwrap_or_else(|| {
-                if target_tool_name.starts_with("db_") {
-                    let db_alias = arguments.get("database").and_then(|d| d.as_str()).unwrap_or("Database");
-                    format!("Database ({})", db_alias)
-                } else if target_tool_name.contains("procedure") || target_tool_name.contains("easypanel") {
+                if target_tool_name.contains("procedure") || target_tool_name.contains("easypanel") {
                     "Easypanel".to_string()
                 } else {
                     "Coolify".to_string()
@@ -348,64 +339,6 @@ pub fn handle_json_rpc(body_str: &str) -> serde_json::Value {
 
                 // If approved, use clean_args (ticket stripped)
                 arguments = clean_args;
-            }
-
-            // Built-in Database Universal Tools execution
-            if target_tool_name.starts_with("db_") {
-                let db_result = match target_tool_name {
-                    "db_list_databases" => Ok(execute_db_list_databases()),
-                    "db_list_tables" => {
-                        let db_alias = arguments.get("database").and_then(|d| d.as_str()).unwrap_or("");
-                        let schema = arguments.get("schema").and_then(|s| s.as_str());
-                        execute_db_list_tables(db_alias, schema)
-                    }
-                    "db_describe_table" => {
-                        let db_alias = arguments.get("database").and_then(|d| d.as_str()).unwrap_or("");
-                        let table = arguments.get("table").and_then(|t| t.as_str()).unwrap_or("");
-                        let schema = arguments.get("schema").and_then(|s| s.as_str());
-                        execute_db_describe_table(db_alias, table, schema)
-                    }
-                    "db_query" => {
-                        let db_alias = arguments.get("database").and_then(|d| d.as_str()).unwrap_or("");
-                        let sql = arguments.get("sql").and_then(|s| s.as_str()).unwrap_or("");
-                        let max_rows = arguments.get("max_rows").and_then(|m| m.as_u64()).map(|m| m as usize);
-                        execute_db_query(db_alias, sql, max_rows)
-                    }
-                    "db_explain_query" => {
-                        let db_alias = arguments.get("database").and_then(|d| d.as_str()).unwrap_or("");
-                        let sql = arguments.get("sql").and_then(|s| s.as_str()).unwrap_or("");
-                        execute_db_explain(db_alias, sql)
-                    }
-                    _ => Err(format!("Unknown database tool '{}'", target_tool_name)),
-                };
-
-                return match db_result {
-                    Ok(val) => serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "result": {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": serde_json::to_string_pretty(&val).unwrap_or_default()
-                                }
-                            ]
-                        }
-                    }),
-                    Err(err_msg) => serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "result": {
-                            "isError": true,
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": format!("Database Error: {}", err_msg)
-                                }
-                            ]
-                        }
-                    }),
-                };
             }
 
             // Route directly to targeted server if namespaced
@@ -865,15 +798,7 @@ pub fn handle_gateway_client(mut stream: TcpStream, port: u16) {
                 .unwrap_or("")
                 .to_string();
 
-            let server = if target.starts_with("db_") {
-                let db_alias = val
-                    .get("params")
-                    .and_then(|p| p.get("arguments"))
-                    .and_then(|a| a.get("database"))
-                    .and_then(|d| d.as_str())
-                    .unwrap_or("Database");
-                format!("Database ({})", db_alias)
-            } else if target.contains("procedure")
+            let server = if target.contains("procedure")
                 || target.contains("easypanel")
                 || target.starts_with("execute_")
                 || target == "listProjects"
