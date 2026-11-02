@@ -109,6 +109,9 @@ jobs:
 
           $binaryPath = Join-Path "src-tauri/target/release" "$($binaryTarget.name).exe"
           if (-not (Test-Path -LiteralPath $binaryPath)) {
+            $binaryPath = Join-Path "target/release" "$($binaryTarget.name).exe"
+          }
+          if (-not (Test-Path -LiteralPath $binaryPath)) {
             throw "Portable executable was not found at $binaryPath."
           }
 
@@ -131,11 +134,19 @@ jobs:
           fi
 
           if [ -n "${{ matrix.rustTargets }}" ]; then
-            cargo build --release --manifest-path src-tauri/Cargo.toml --target ${{ matrix.rustTargets }} --bin mcp-gateway-cli
-            BIN_DIR="src-tauri/target/${{ matrix.rustTargets }}/release"
+            cargo build --release -p mcp-gateway-cli --target ${{ matrix.rustTargets }}
+            if [ -d "target/${{ matrix.rustTargets }}/release" ]; then
+              BIN_DIR="target/${{ matrix.rustTargets }}/release"
+            else
+              BIN_DIR="src-tauri/target/${{ matrix.rustTargets }}/release"
+            fi
           else
-            cargo build --release --manifest-path src-tauri/Cargo.toml --bin mcp-gateway-cli
-            BIN_DIR="src-tauri/target/release"
+            cargo build --release -p mcp-gateway-cli
+            if [ -d "target/release" ]; then
+              BIN_DIR="target/release"
+            else
+              BIN_DIR="src-tauri/target/release"
+            fi
           fi
 
           if [ "${{ runner.os }}" = "Windows" ]; then

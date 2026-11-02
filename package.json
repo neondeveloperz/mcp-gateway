@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:cli": "cargo build --release --manifest-path src-tauri/Cargo.toml --bin mcp-gateway-cli",
+    "build:cli": "cargo build --release -p mcp-gateway-cli",
     "build:gui": "tauri build",
     "build:all": "bun run build && bun run tauri build && bun run build:cli",
     "lint": "eslint .",

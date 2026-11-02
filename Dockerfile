@@ -2,7 +2,9 @@
 FROM rust:1.85-bullseye AS builder
 
 WORKDIR /app
+COPY Cargo.toml ./
 COPY src-tauri ./src-tauri
+COPY cli ./cli
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
@@ -13,8 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     librsvg2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app/src-tauri
-RUN cargo build --release --bin mcp-gateway-cli
+RUN cargo build --release -p mcp-gateway-cli
 
 # Runtime image
 FROM debian:bullseye-slim
@@ -30,7 +31,7 @@ RUN useradd -m -u 1000 -s /bin/bash gatewayuser
 USER gatewayuser
 WORKDIR /home/gatewayuser
 
-COPY --from=builder /app/src-tauri/target/release/mcp-gateway-cli /usr/local/bin/mcp-gateway-cli
+COPY --from=builder /app/target/release/mcp-gateway-cli /usr/local/bin/mcp-gateway-cli
 
 ENV MCP_GATEWAY_PORT=8080
 ENV MCP_GATEWAY_HOST=0.0.0.0
